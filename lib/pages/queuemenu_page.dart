@@ -140,7 +140,7 @@ class _QueueMenuPageState extends State<QueueMenuPage> {
         Set<int> usedNums = {};
         for (var doc in queueSnapshot.docs) {
           final id = doc.id;
-          final match = RegExp(r'queueList(\\d+)').firstMatch(id);
+          final match = RegExp(r'queueList(\d+)').firstMatch(id);
           if (match != null) {
             final num = int.tryParse(match.group(1) ?? '0') ?? 0;
             usedNums.add(num);
