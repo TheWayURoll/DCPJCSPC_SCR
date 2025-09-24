@@ -90,21 +90,12 @@ class _QueueMenuPageState extends State<QueueMenuPage> {
   }
 
   bool get isFormValid {
-  final isDoctorSelected = selectedDoctor != null && selectedDoctor!.isNotEmpty;
-  final isDescFilled = descriptionController.text.trim().isNotEmpty;
-  final isTimeValid = selectedTime != null && ((selectedTime!.hour >= 9 && selectedTime!.hour < 17) ||
-    (selectedTime!.hour == 17 && selectedTime!.minute == 0));
-  final isMinuteValid = selectedTime != null && selectedTime!.minute % 15 == 0;
-  final selectedDateTime = selectedTime == null ? null : DateTime(selectedDay.year, selectedDay.month, selectedDay.day, selectedTime!.hour, selectedTime!.minute);
-  // ตรวจสอบซ้ำ: docId+date+time ต้องไม่ซ้ำกับ queueLists อื่น
-  final isDuplicate = selectedDateTime == null ? false : _bookedDateTimes.any((dt) =>
-    dt.year == selectedDateTime.year &&
-    dt.month == selectedDateTime.month &&
-    dt.day == selectedDateTime.day &&
-    dt.hour == selectedDateTime.hour &&
-    dt.minute == selectedDateTime.minute
-  );
-  return isDoctorSelected && isDescFilled && isTimeValid && isMinuteValid && !isDuplicate;
+    final isDoctorSelected = selectedDoctor != null && selectedDoctor!.isNotEmpty;
+    final isDescFilled = descriptionController.text.trim().isNotEmpty;
+    final isTimeValid = selectedTime != null && ((selectedTime!.hour >= 9 && selectedTime!.hour < 17) ||
+      (selectedTime!.hour == 17 && selectedTime!.minute == 0));
+    final isMinuteValid = selectedTime != null && selectedTime!.minute % 15 == 0;
+    return isDoctorSelected && isDescFilled && isTimeValid && isMinuteValid;
   }
 
   Future<void> saveQueue() async {
@@ -113,35 +104,16 @@ class _QueueMenuPageState extends State<QueueMenuPage> {
     String? docId;
     if (selectedDoctor != null) {
       final snapshot = await FirebaseFirestore.instance
-        .collection('doctor')
-        .where('docName', isEqualTo: selectedDoctor)
-        .limit(1)
-        .get();
+          .collection('doctor')
+          .where('docName', isEqualTo: selectedDoctor)
+          .limit(1)
+          .get();
       if (snapshot.docs.isNotEmpty) {
         docId = snapshot.docs.first['docId'] as String?;
       }
     }
     if (docId == null) return;
 
-    // หา queueListN ที่ว่าง (เช่น queueList1, queueList2, ...)
-    final queueSnapshot = await FirebaseFirestore.instance.collection('queueLists').get();
-    Set<int> usedNums = {};
-    for (var doc in queueSnapshot.docs) {
-      final id = doc.id;
-      final match = RegExp(r'queueList(\d+)').firstMatch(id);
-      if (match != null) {
-        final num = int.tryParse(match.group(1) ?? '0') ?? 0;
-        usedNums.add(num);
-      }
-    }
-    int nextQueueNum = 1;
-    while (usedNums.contains(nextQueueNum)) {
-      nextQueueNum++;
-    }
-    final queueDocId = 'queueList$nextQueueNum';
-    final queueId = 'qi${nextQueueNum.toString().padLeft(3, '0')}';
-
-    // รวมวันและเวลา
     if (selectedTime == null) return;
     final DateTime queueDateTime = DateTime(
       selectedDay.year,
@@ -151,25 +123,64 @@ class _QueueMenuPageState extends State<QueueMenuPage> {
       selectedTime!.minute,
     );
 
-    await FirebaseFirestore.instance.collection('queueLists').doc(queueDocId).set({
-      'queueDate': queueDateTime,
-      'queueDocList': {'docId': docId},
-      'queueId': queueId,
-      'queueText': descriptionController.text,
-      'queueUserList': {'userIdCard': widget.userIdCard},
-    });
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('บันทึกสำเร็จ')),
-      );
-      setState(() {
-        selectedDoctor = null;
-        selectedDay = DateTime.now();
-        selectedTime = null;
-        descriptionController.clear();
-        _timeErrorText = null;
+    try {
+      await FirebaseFirestore.instance.runTransaction((transaction) async {
+        final queueRef = FirebaseFirestore.instance.collection('queueLists');
+        // ตรวจสอบซ้ำใน transaction
+        final duplicateSnap = await queueRef
+            .where('queueDocList.docId', isEqualTo: docId)
+            .where('queueDate', isEqualTo: queueDateTime)
+            .get();
+        if (duplicateSnap.docs.isNotEmpty) {
+          throw Exception('มีการจองคิวนี้แล้ว กรุณาเลือกเวลาใหม่');
+        }
+
+        // หา queueListN ที่ว่าง (เช่น queueList1, queueList2, ...)
+        final queueSnapshot = await queueRef.get();
+        Set<int> usedNums = {};
+        for (var doc in queueSnapshot.docs) {
+          final id = doc.id;
+          final match = RegExp(r'queueList(\\d+)').firstMatch(id);
+          if (match != null) {
+            final num = int.tryParse(match.group(1) ?? '0') ?? 0;
+            usedNums.add(num);
+          }
+        }
+        int nextQueueNum = 1;
+        while (usedNums.contains(nextQueueNum)) {
+          nextQueueNum++;
+        }
+        final queueDocId = 'queueList$nextQueueNum';
+        final queueId = 'qi${nextQueueNum.toString().padLeft(3, '0')}';
+
+        transaction.set(queueRef.doc(queueDocId), {
+          'queueDate': queueDateTime,
+          'queueDocList': {'docId': docId},
+          'queueId': queueId,
+          'queueText': descriptionController.text,
+          'queueUserList': {'userIdCard': widget.userIdCard},
+        });
       });
-      await fetchBookedTimes();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('บันทึกสำเร็จ')),
+        );
+        setState(() {
+          selectedDoctor = null;
+          selectedDay = DateTime.now();
+          selectedTime = null;
+          descriptionController.clear();
+          _timeErrorText = null;
+        });
+        await fetchBookedTimes();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString().replaceAll('Exception: ', ''))),
+        );
+      }
     }
   }
 
@@ -274,7 +285,11 @@ class _QueueMenuPageState extends State<QueueMenuPage> {
                     firstDate: DateTime.now(),
                     lastDate: DateTime(2030),
                   );
-                  if (picked != null) setState(() => selectedDay = picked);
+                  if (picked != null) {
+                    setState(() => selectedDay = picked);
+                  } else {
+                    setState(() {}); // เพื่อให้ปุ่มอัปเดตแม้ไม่ได้เลือกวันใหม่
+                  }
                 },
               ),
               const SizedBox(height: 18),
@@ -348,6 +363,7 @@ class _QueueMenuPageState extends State<QueueMenuPage> {
                   fillColor: Colors.white,
                   filled: true,
                 ),
+                onChanged: (_) => setState(() {}),
               ),
               const SizedBox(height: 24),
 
