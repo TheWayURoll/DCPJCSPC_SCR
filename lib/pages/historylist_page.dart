@@ -40,7 +40,7 @@ class _HistoryListPageState extends State<HistoryListPage> {
   List<DocumentSnapshot> _docs = [];
   bool _loading = true;
   bool _loadedOnce = false;
-  Map<String, Map<String, dynamic>> _queueDetailMap = {}; // เก็บข้อมูล queueText, queueDate จาก queueLists
+  // Map<String, Map<String, dynamic>> _queueDetailMap = {}; // เก็บข้อมูล queueText, queueDate จาก queueLists
 
   @override
   void didChangeDependencies() {
@@ -48,6 +48,10 @@ class _HistoryListPageState extends State<HistoryListPage> {
     if (!_loadedOnce) {
       _fetchHistory();
       _loadedOnce = true;
+      // รีเฟรชอีกครั้งหลัง build เสร็จ (เช่นเมื่อกดปุ่มเมนูเข้าหน้านี้)
+      Future.delayed(const Duration(milliseconds: 300), () {
+        if (mounted) _fetchHistory();
+      });
     }
   }
 
@@ -55,10 +59,11 @@ class _HistoryListPageState extends State<HistoryListPage> {
     setState(() {
       _loading = true;
     });
-    final snapshot = await FirebaseFirestore.instance
-        .collection('logHistory')
-        .where('userIdCard', isEqualTo: widget.userIdCard)
-        .get();
+  final snapshot = await FirebaseFirestore.instance
+    .collection('logHistory')
+    .where('userIdCard', isEqualTo: widget.userIdCard)
+    .orderBy('queueDate', descending: true)
+    .get();
     final docs = snapshot.docs;
     final docIds = docs
         .map((d) => (d.data()['docId'] ?? ''))
@@ -92,7 +97,7 @@ class _HistoryListPageState extends State<HistoryListPage> {
       setState(() {
         _docs = docs;
         _doctorMap = doctorMap;
-        _queueDetailMap = queueDetailMap;
+        // _queueDetailMap = queueDetailMap;
         _loading = false;
       });
     }
@@ -141,38 +146,13 @@ class _HistoryListPageState extends State<HistoryListPage> {
                           final data = _docs[idx].data() as Map<String, dynamic>;
                           final docId = data['docId'] ?? '';
                           final doctorName = _doctorMap[docId] ?? docId;
-                          final queueId = data['queueId'] ?? '';
-                          final logHisId = data['logHisId'] ?? '';
-                          final queueDetail = _queueDetailMap[queueId] ?? {};
-                          // วันที่: ใช้ queueDate จาก queueLists ถ้ามี
-                          DateTime? queueDate;
-                          if (queueDetail['queueDate'] is Timestamp) {
-                            queueDate = (queueDetail['queueDate'] as Timestamp).toDate();
-                          } else if (queueDetail['queueDate'] is String) {
-                            queueDate = DateTime.tryParse(queueDetail['queueDate']);
-                          }
+                          final queueDate = data['queueDate'];
                           String dateStr = '-';
-                          if (queueDate != null) {
-                            final hour = queueDate.hour.toString().padLeft(2, '0');
-                            final minute = queueDate.minute.toString().padLeft(2, '0');
-                            dateStr = '${queueDate.day}/${queueDate.month}/${queueDate.year}  $hour:$minute';
+                          if (queueDate is Timestamp) {
+                            final dt = queueDate.toDate();
+                            dateStr = '${dt.day}/${dt.month}/${dt.year} ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
                           }
-                          // รายละเอียด: ใช้ queueText จาก queueLists ถ้ามี ถ้าไม่มีให้ fallback
-                          String detail = '';
-                          if (queueDetail['queueText'] != null && (queueDetail['queueText'] as String).isNotEmpty) {
-                            detail = queueDetail['queueText'];
-                          } else if (queueId.isNotEmpty) {
-                            detail = 'queueId: $queueId';
-                          } else if (logHisId.isNotEmpty) {
-                            detail = 'logHisId: $logHisId';
-                          } else if (docId.isNotEmpty) {
-                            detail = 'docId: $docId';
-                          } else {
-                            detail = 'ไม่มีข้อมูลรายละเอียด';
-                          }
-                          if (dateStr == '-') {
-                            dateStr = '-';
-                          }
+                          final detail = data['queueText'] ?? '';
                           return Container(
                             margin: const EdgeInsets.only(bottom: 24),
                             padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
@@ -193,7 +173,7 @@ class _HistoryListPageState extends State<HistoryListPage> {
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
-                                  'นัดหมาย $doctorName ผาสุข :',
+                                  'นัดหมาย $doctorName :',
                                   style: const TextStyle(
                                     fontSize: 16,
                                     color: Colors.black87,

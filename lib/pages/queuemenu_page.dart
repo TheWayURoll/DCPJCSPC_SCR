@@ -124,6 +124,7 @@ class _QueueMenuPageState extends State<QueueMenuPage> {
     );
 
     try {
+      String? queueId;
       await FirebaseFirestore.instance.runTransaction((transaction) async {
         final queueRef = FirebaseFirestore.instance.collection('queueLists');
         // ตรวจสอบซ้ำใน transaction
@@ -146,12 +147,13 @@ class _QueueMenuPageState extends State<QueueMenuPage> {
             usedNums.add(num);
           }
         }
+
         int nextQueueNum = 1;
-        while (usedNums.contains(nextQueueNum)) {
-          nextQueueNum++;
+        if (usedNums.isNotEmpty) {
+          nextQueueNum = usedNums.reduce((a, b) => a > b ? a : b) + 1;
         }
         final queueDocId = 'queueList$nextQueueNum';
-        final queueId = 'qi${nextQueueNum.toString().padLeft(3, '0')}';
+        queueId = 'qi${nextQueueNum.toString().padLeft(3, '0')}';
 
         transaction.set(queueRef.doc(queueDocId), {
           'queueDate': queueDateTime,
@@ -161,6 +163,34 @@ class _QueueMenuPageState extends State<QueueMenuPage> {
           'queueUserList': {'userIdCard': widget.userIdCard},
         });
       });
+
+      // เพิ่ม logHistory หลังจากสร้าง queueLists สำเร็จ
+      if (queueId != null) {
+        // หาเลข logHisListN ที่มากที่สุด แล้ว +1
+        final logHisRef = FirebaseFirestore.instance.collection('logHistory');
+        final logHisSnap = await logHisRef.get();
+        Set<int> usedLogNums = {};
+        for (var doc in logHisSnap.docs) {
+          final id = doc.id;
+          final match = RegExp(r'logHisList(\d+)').firstMatch(id);
+          if (match != null) {
+            final num = int.tryParse(match.group(1) ?? '0') ?? 0;
+            usedLogNums.add(num);
+          }
+        }
+        int nextLogNum = 1;
+        if (usedLogNums.isNotEmpty) {
+          nextLogNum = usedLogNums.reduce((a, b) => a > b ? a : b) + 1;
+        }
+        final logHisDocId = 'logHisList$nextLogNum';
+        await logHisRef.doc(logHisDocId).set({
+          'queueId': queueId,
+          'docId': docId,
+          'userIdCard': widget.userIdCard,
+          'queueDate': queueDateTime,
+          'queueText': descriptionController.text,
+        });
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -183,6 +213,98 @@ class _QueueMenuPageState extends State<QueueMenuPage> {
       }
     }
   }
+
+  /// อัปเดต queueLists และ logHistory ที่ queueId เดียวกัน
+Future<void> updateQueueAndLogHistory({
+  required String queueDocId,
+  required String queueId,
+  required String newQueueText,
+  required DateTime newQueueDate,
+}) async {
+  // อัปเดต queueLists
+  await FirebaseFirestore.instance.collection('queueLists').doc(queueDocId).update({
+    'queueText': newQueueText,
+    'queueDate': newQueueDate,
+  });
+
+  // อัปเดต logHistory ที่ queueId เดียวกัน
+  final logSnap = await FirebaseFirestore.instance
+      .collection('logHistory')
+      .where('queueId', isEqualTo: queueId)
+      .get();
+  for (var doc in logSnap.docs) {
+    await doc.reference.update({
+      'queueText': newQueueText,
+      'queueDate': newQueueDate,
+    });
+  }
+}
+
+// ตัวอย่างการเรียกใช้ (หลังจากแก้ไขข้อมูลนัดหมาย)
+// await updateQueueAndLogHistory(
+//   queueDocId: 'queueList1',
+//   queueId: 'qi001',
+//   newQueueText: 'ข้อความใหม่',
+//   newQueueDate: DateTime.now(),
+// );
+
+  void showEditQueueDialog(BuildContext context, String queueDocId, String queueId, String oldText, DateTime oldDate) {
+  final TextEditingController editController = TextEditingController(text: oldText);
+  DateTime selectedDate = oldDate;
+  showDialog(
+    context: context,
+    builder: (context) {
+      return AlertDialog(
+        title: const Text('แก้ไขรายการนัดหมาย'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: editController,
+              decoration: const InputDecoration(labelText: 'คำอธิบาย'),
+            ),
+            const SizedBox(height: 8),
+            ElevatedButton(
+              onPressed: () async {
+                final picked = await showDatePicker(
+                  context: context,
+                  initialDate: selectedDate,
+                  firstDate: DateTime.now(),
+                  lastDate: DateTime(2100),
+                );
+                if (picked != null) {
+                  selectedDate = DateTime(
+                    picked.year, picked.month, picked.day,
+                    selectedDate.hour, selectedDate.minute,
+                  );
+                }
+              },
+              child: const Text('เลือกวันที่'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('ยกเลิก'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              await updateQueueAndLogHistory(
+                queueDocId: queueDocId,
+                queueId: queueId,
+                newQueueText: editController.text,
+                newQueueDate: selectedDate,
+              );
+              Navigator.pop(context);
+            },
+            child: const Text('บันทึก'),
+          ),
+        ],
+      );
+    },
+  );
+}
 
   @override
   Widget build(BuildContext context) {
