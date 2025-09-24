@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1016649363066",
+    "project_id": "appcsopc",
+    "storage_bucket": "appcsopc.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1016649363066:android:3f3265167e06463173d5c3",
+        "android_client_info": {
+          "package_name": "com.example.dcpjcspc_scr"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCCsxmNBMyPIs6OeGdqTkZA1Mav40twC6Y"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
