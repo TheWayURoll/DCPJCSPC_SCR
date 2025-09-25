@@ -1,9 +1,9 @@
 import 'package:dcpjcspc_scr/pages/mainmenu_page.dart';
 import 'package:dcpjcspc_scr/pages/register_page.dart';
+import 'package:dcpjcspc_scr/pages/personal_login_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'dart:developer';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -35,9 +35,17 @@ class _LoginPageState extends State<LoginPage> {
     }
 
     try {
-      // ค้นหาผู้ใช้จาก Firebase Firestore ด้วย userIdCard
-      log('Attempting login for userIdCard: $userIdCard');
-      log('Password entered: $password');
+      // ตรวจสอบว่ามี userIdCard ในฐานข้อมูลหรือไม่
+      final idQuery = await FirebaseFirestore.instance
+          .collection('user')
+          .where('userIdCard', isEqualTo: userIdCard)
+          .limit(1)
+          .get();
+      if (idQuery.docs.isEmpty) {
+        _showErrorDialog('ไม่พบข้อมูลหรือไม่มีผู้ใช้บัญชีเลขบัตรประชาชนนี้');
+        return;
+      }
+      // ตรวจสอบ userIdCard + password
       final userQuery = await FirebaseFirestore.instance
           .collection('user')
           .where('userIdCard', isEqualTo: userIdCard)
@@ -46,7 +54,7 @@ class _LoginPageState extends State<LoginPage> {
           .get();
 
       if (userQuery.docs.isNotEmpty) {
-        // ล็อกอินสำเร็จ
+        // ล็อกอินสำเร็จ เป็น user ทั่วไป
         _usernameController.clear();
         _passwordController.clear();
         final userData = userQuery.docs.first.data();
@@ -56,10 +64,11 @@ class _LoginPageState extends State<LoginPage> {
             builder: (context) => MainmenuPage(userIdCard: userData['userIdCard']),
           ),
         );
-      } else {
-        // ไม่พบข้อมูลผู้ใช้
-        _showErrorDialog('ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง');
+        return;
       }
+
+      // userIdCard มีอยู่แต่รหัสผ่านผิด
+      _showErrorDialog('เลขบัตรประชาชนหรือรหัสผ่านไม่ถูกต้อง');
     } catch (e) {
       // เกิดข้อผิดพลาดในการเชื่อมต่อ
       _showErrorDialog('เกิดข้อผิดพลาดในการเชื่อมต่อ กรุณาลองใหม่อีกครั้ง');
@@ -136,32 +145,52 @@ class _LoginPageState extends State<LoginPage> {
               ),
             ),
             const SizedBox(height: 40),
-            ElevatedButton(onPressed: _loginUser,
-            style: ElevatedButton.styleFrom(
+            ElevatedButton(
+              onPressed: _loginUser,
+              style: ElevatedButton.styleFrom(
                 padding: EdgeInsets.symmetric(horizontal: 90, vertical: 10),
                 foregroundColor: Colors.white,
                 backgroundColor: Colors.deepPurple.shade400,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(20),
                 ),
-              ), 
-            child: Text('ตกลง'),
+              ),
+              child: Text('ตกลง'),
             ),
             const SizedBox(height: 40),
-            ElevatedButton(onPressed: () {
-              _passwordController.clear();
-              _usernameController.clear();
-              Navigator.push(context, MaterialPageRoute<void>(builder: (context) => const RegisterPage(),),);
-            },
-            style: ElevatedButton.styleFrom(
+            ElevatedButton(
+              onPressed: () {
+                _passwordController.clear();
+                _usernameController.clear();
+                Navigator.push(context, MaterialPageRoute<void>(builder: (context) => const RegisterPage(),),);
+              },
+              style: ElevatedButton.styleFrom(
                 padding: EdgeInsets.symmetric(horizontal: 50, vertical: 10),
                 foregroundColor: Colors.white,
                 backgroundColor: Colors.deepPurple.shade400,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(20),
                 ),
-              ), 
-            child: Text('สมัครสมาชิก'),
+              ),
+              child: Text('สมัครสมาชิก'),
+            ),
+            const SizedBox(height: 100),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const PersonalLoginPage()),
+                );
+              },
+              style: ElevatedButton.styleFrom(
+                padding: EdgeInsets.symmetric(horizontal: 30, vertical: 10),
+                foregroundColor: Colors.white,
+                backgroundColor: Colors.deepPurple.shade400,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
+              ),
+              child: Text('เข้าระบบของบุคลากร'),
             ),
           ],
         ),
