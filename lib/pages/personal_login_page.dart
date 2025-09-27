@@ -57,7 +57,7 @@ class _PersonalLoginPageState extends State<PersonalLoginPage> {
       if (doctorQuery.docs.isNotEmpty) {
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (context) => const DocmainmenuPage()),
+          MaterialPageRoute(builder: (context) => DocmainmenuPage(docId: id)),
         );
         return;
       }
@@ -71,7 +71,7 @@ class _PersonalLoginPageState extends State<PersonalLoginPage> {
       if (adminQuery.docs.isNotEmpty) {
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (context) => const AdminmainmenuPage()),
+          MaterialPageRoute(builder: (context) => AdminmainmenuPage(adminId: id)),
         );
         return;
       }
@@ -117,14 +117,17 @@ class _PersonalLoginPageState extends State<PersonalLoginPage> {
             const SizedBox(height: 50),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 30),
-              child: TextField(
-                controller: _idController,
-                decoration: const InputDecoration(
-                  border: OutlineInputBorder(),
-                  labelText: 'กรุณาใส่ ID ของคุณ',
-                  hintText: 'กรุณาใส่ ID ของคุณ',
+                child: TextField(
+                  controller: _idController,
+                  decoration: const InputDecoration(
+                    border: OutlineInputBorder(),
+                    labelText: 'กรุณาใส่ ID ของคุณ',
+                    hintText: 'กรุณาใส่ ID ของคุณ',
+                  ),
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9]')),
+                  ],
                 ),
-              ),
             ),
             const SizedBox(height: 40),
             Padding(

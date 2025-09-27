@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 
 class AdminmainmenuPage extends StatefulWidget {
-  const AdminmainmenuPage({super.key});
+  final String adminId;
+  const AdminmainmenuPage({super.key, required this.adminId});
 
   @override
   State<AdminmainmenuPage> createState() => _AdminmainmenuPageState();
