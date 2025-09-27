@@ -1,4 +1,5 @@
 import 'package:dcpjcspc_scr/pages/doctor/doc_accout_page.dart';
+import 'package:dcpjcspc_scr/pages/doctor/doc_calwork_page.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
@@ -119,7 +120,7 @@ class _DocmainmenuPageState extends State<DocmainmenuPage> {
             ),
           ),
           // Tab 1: ตารางงาน (mock)
-          SafeArea(child: Center(child: Text('ตารางงาน', style: TextStyle(fontSize: 24)))),
+          DocCalworkPage(),
           // Tab 2: ประวัติการจอง (mock)
           SafeArea(child: Center(child: Text('ประวัติการจอง', style: TextStyle(fontSize: 24)))),
           // Tab 3: บัญชีหมอ
