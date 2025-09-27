@@ -119,10 +119,11 @@ class _UserQueueEditState extends State<UserQueueEdit> {
                         value: d['docId'] as String,
                         child: Text(d['docName'] as String),
                       )).toList(),
-                      onChanged: (val) {
+                      onChanged: (val) async {
                         setState(() {
                           _selectedDoctorId = val;
                         });
+                        await fetchBookedTimes();
                       },
                       decoration: const InputDecoration(labelText: 'เลือกแพทย์'),
                     ),
@@ -147,7 +148,10 @@ class _UserQueueEditState extends State<UserQueueEdit> {
                               firstDate: DateTime.now(),
                               lastDate: DateTime(2100),
                             );
-                            if (picked != null) setState(() => _selectedDate = picked);
+                            if (picked != null) {
+                              setState(() => _selectedDate = picked);
+                              await fetchBookedTimes();
+                            }
                           },
                           child: const Text('เลือกวันที่'),
                         ),
@@ -158,14 +162,16 @@ class _UserQueueEditState extends State<UserQueueEdit> {
                       items: availableTimes.map((t) {
                         final booked = isTimeBooked(t);
                         final label = t.format(context) + (booked ? ' (จองแล้ว)' : '');
-                        return DropdownMenuItem(
-                          value: booked ? null : t,
-                          enabled: !booked,
+                        return DropdownMenuItem<TimeOfDay>(
+                          value: t,
+                          enabled: !booked || (_selectedTime != null && t.hour == _selectedTime!.hour && t.minute == _selectedTime!.minute),
                           child: Text(label, style: TextStyle(fontSize: 20, color: booked ? Colors.grey : Colors.black)),
                         );
                       }).toList(),
                       onChanged: (t) {
                         if (t == null) return;
+                        // ไม่อนุญาตเลือกเวลาที่จองแล้ว
+                        if (isTimeBooked(t) && (_selectedTime == null || t != _selectedTime)) return;
                         setState(() {
                           _selectedTime = t;
                         });

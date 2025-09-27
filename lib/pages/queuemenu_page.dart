@@ -99,6 +99,7 @@ class _QueueMenuPageState extends State<QueueMenuPage> {
   }
 
   Future<void> saveQueue() async {
+
     if (!isFormValid) return;
     // หา docId จากชื่อหมอ
     String? docId;
@@ -122,6 +123,7 @@ class _QueueMenuPageState extends State<QueueMenuPage> {
       selectedTime!.hour,
       selectedTime!.minute,
     );
+
 
     try {
       String? queueId;
@@ -160,37 +162,12 @@ class _QueueMenuPageState extends State<QueueMenuPage> {
           'queueDocList': {'docId': docId},
           'queueId': queueId,
           'queueText': descriptionController.text,
-          'queueUserList': {'userIdCard': widget.userIdCard},
+          'queueUserList': {
+            'userIdCard': widget.userIdCard,
+          },
         });
       });
 
-      // เพิ่ม logHistory หลังจากสร้าง queueLists สำเร็จ
-      if (queueId != null) {
-        // หาเลข logHisListN ที่มากที่สุด แล้ว +1
-        final logHisRef = FirebaseFirestore.instance.collection('logHistory');
-        final logHisSnap = await logHisRef.get();
-        Set<int> usedLogNums = {};
-        for (var doc in logHisSnap.docs) {
-          final id = doc.id;
-          final match = RegExp(r'logHisList(\d+)').firstMatch(id);
-          if (match != null) {
-            final num = int.tryParse(match.group(1) ?? '0') ?? 0;
-            usedLogNums.add(num);
-          }
-        }
-        int nextLogNum = 1;
-        if (usedLogNums.isNotEmpty) {
-          nextLogNum = usedLogNums.reduce((a, b) => a > b ? a : b) + 1;
-        }
-        final logHisDocId = 'logHisList$nextLogNum';
-        await logHisRef.doc(logHisDocId).set({
-          'queueId': queueId,
-          'docId': docId,
-          'userIdCard': widget.userIdCard,
-          'queueDate': queueDateTime,
-          'queueText': descriptionController.text,
-        });
-      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
