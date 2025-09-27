@@ -75,7 +75,7 @@ class _DocmainmenuPageState extends State<DocmainmenuPage> {
                               final dateStr = '${queueDate.day}/${queueDate.month}/${queueDate.year}';
                               final queueText = data['queueText'] ?? '';
                               final docId = data['queueDocList']?['docId'] ?? '';
-                              final userName = data['queueUserList']?['userName'] ?? '';
+                              final userIdCard = data['queueUserList']?['userIdCard'] ?? '';
                               return Container(
                                 width: double.infinity,
                                 margin: const EdgeInsets.only(bottom: 12),
@@ -100,9 +100,32 @@ class _DocmainmenuPageState extends State<DocmainmenuPage> {
                                         if (docSnap.hasData && docSnap.data!.exists) {
                                           doctorName = docSnap.data!['docName'] ?? '';
                                         }
-                                        return Text(
-                                          'นัดหมาย $doctorName ผาสุข :\n($queueText) โดย $userName',
-                                          style: const TextStyle(color: Colors.black87, fontSize: 14),
+                                        return FutureBuilder<DocumentSnapshot>(
+                                          future: FirebaseFirestore.instance.collection('user').doc(userIdCard).get(),
+                                          builder: (context, userSnap) {
+                                            String userName = userIdCard;
+                                            if (userSnap.hasData && userSnap.data!.exists) {
+                                              final userData = userSnap.data!.data() as Map<String, dynamic>?;
+                                              userName = userData?['userName'] ?? userIdCard;
+                                            }
+                                            return Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  'นัดหมาย $doctorName :',
+                                                  style: const TextStyle(color: Colors.black87, fontSize: 14),
+                                                ),
+                                                Text(
+                                                  '($queueText)',
+                                                  style: const TextStyle(color: Colors.black87, fontSize: 14),
+                                                ),
+                                                Text(
+                                                  'โดย $userName',
+                                                  style: const TextStyle(color: Colors.black87, fontSize: 14),
+                                                ),
+                                              ],
+                                            );
+                                          },
                                         );
                                       },
                                     ),

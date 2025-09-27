@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:dcpjcspc_scr/pages/personal_login_page.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class DocAccoutPage extends StatefulWidget {
@@ -80,9 +81,12 @@ class _DocAccoutPageState extends State<DocAccoutPage> {
                   const SizedBox(height: 16),
                   ElevatedButton.icon(
                     onPressed: () {
-                      // TODO: ออกจากระบบ
+                      Navigator.of(context).pushAndRemoveUntil(
+                        MaterialPageRoute(builder: (context) => PersonalLoginPage()),
+                        (route) => false,
+                      );
                     },
-                    icon: const Icon(Icons.arrow_back, color: Colors.deepPurple),
+                    icon: const Icon(Icons.logout, color: Colors.deepPurple),
                     label: const Text(
                       'ออกจากระบบ',
                       style: TextStyle(color: Colors.deepPurple, fontSize: 18),

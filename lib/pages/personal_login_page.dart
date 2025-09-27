@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:dcpjcspc_scr/pages/login_page.dart';
 import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:dcpjcspc_scr/pages/doctor/docmainmenu_page.dart';
@@ -102,7 +103,16 @@ class _PersonalLoginPageState extends State<PersonalLoginPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(),
+      appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () {
+            Navigator.of(context).pushReplacement(
+              MaterialPageRoute(builder: (context) => LoginPage()),
+            );
+          },
+        ),
+      ),
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.start,
