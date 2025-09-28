@@ -1,3 +1,4 @@
+import 'package:dcpjcspc_scr/classes/doctor/doc_settings.dart';
 import 'package:flutter/material.dart';
 import 'package:dcpjcspc_scr/pages/personal_login_page.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -11,6 +12,10 @@ class DocAccoutPage extends StatefulWidget {
 }
 
 class _DocAccoutPageState extends State<DocAccoutPage> {
+  void _fetchDocData() {
+    setState(() {});
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -61,8 +66,17 @@ class _DocAccoutPageState extends State<DocAccoutPage> {
                   ),
                   const SizedBox(height: 32),
                   ElevatedButton.icon(
-                    onPressed: () {
-                      // TODO: ไปหน้าตั้งค่า
+                    onPressed: () async {
+												final result = await Navigator.push(
+													context,
+													MaterialPageRoute(
+														builder: (context) => DocSettings(),
+														settings: RouteSettings(arguments: widget.docId),
+													),
+												);
+												if (result == true) {
+													_fetchDocData(); // รีเฟรชข้อมูลเมื่อกลับมาจากหน้า settings
+												}
                     },
                     icon: const Icon(Icons.settings, color: Colors.black54),
                     label: const Text(
