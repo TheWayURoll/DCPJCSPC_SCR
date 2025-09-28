@@ -46,10 +46,12 @@ class _UserQueueEditState extends State<UserQueueEdit> {
       .get();
     if (!mounted) return;
     setState(() {
-      _bookedDateTimes = snapshot.docs.map((doc) {
-        final ts = doc['queueDate'];
-        return ts is DateTime ? ts : (ts as Timestamp).toDate();
-      }).toList();
+      _bookedDateTimes = snapshot.docs
+        .where((doc) => doc.id != widget.queueDocId) // exclude current editing queue
+        .map((doc) {
+          final ts = doc['queueDate'];
+          return ts is DateTime ? ts : (ts as Timestamp).toDate();
+        }).toList();
     });
   }
   final _formKey = GlobalKey<FormState>();
@@ -81,8 +83,13 @@ class _UserQueueEditState extends State<UserQueueEdit> {
       'docId': d['docId'],
       'docName': d['docName'],
     }).toList();
-  if (!mounted) return;
-  setState(() { _loading = false; });
+
+    // เรียก fetchBookedTimes ถ้ามีหมอและวันที่
+    if (_selectedDoctorId != null && _selectedDate != null) {
+      await fetchBookedTimes();
+    }
+    if (!mounted) return;
+    setState(() { _loading = false; });
   }
 
 
@@ -157,31 +164,59 @@ class _UserQueueEditState extends State<UserQueueEdit> {
                         ),
                       ],
                     ),
-                    DropdownButtonFormField<TimeOfDay>(
-                      value: _selectedTime,
-                      items: availableTimes.map((t) {
-                        final booked = isTimeBooked(t);
-                        final label = t.format(context) + (booked ? ' (จองแล้ว)' : '');
-                        return DropdownMenuItem<TimeOfDay>(
-                          value: t,
-                          enabled: !booked || (_selectedTime != null && t.hour == _selectedTime!.hour && t.minute == _selectedTime!.minute),
-                          child: Text(label, style: TextStyle(fontSize: 20, color: booked ? Colors.grey : Colors.black)),
-                        );
-                      }).toList(),
-                      onChanged: (t) {
-                        if (t == null) return;
-                        // ไม่อนุญาตเลือกเวลาที่จองแล้ว
-                        if (isTimeBooked(t) && (_selectedTime == null || t != _selectedTime)) return;
-                        setState(() {
-                          _selectedTime = t;
-                        });
-                      },
-                      decoration: InputDecoration(
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                        fillColor: Colors.white,
-                        filled: true,
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.purple[50],
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('Enter time', style: TextStyle(fontWeight: FontWeight.w500)),
+                            const SizedBox(height: 8),
+                            DropdownButtonFormField<TimeOfDay>(
+                              value: _selectedDoctorId != null && _selectedTime != null && availableTimes.contains(_selectedTime)
+                                  ? _selectedTime
+                                  : null,
+                              items: _selectedDoctorId != null
+                                  ? availableTimes.map((t) {
+                                      final booked = isTimeBooked(t);
+                                      final label = t.format(context) + (booked ? ' (จองแล้ว)' : '');
+                                      return DropdownMenuItem<TimeOfDay>(
+                                        value: booked ? null : t,
+                                        enabled: !booked,
+                                        child: Text(label, style: TextStyle(fontSize: 20, color: booked ? Colors.grey : Colors.black)),
+                                      );
+                                    }).toList()
+                                  : [],
+                              onChanged: _selectedDoctorId != null
+                                  ? (t) {
+                                      setState(() {
+                                        _selectedTime = t;
+                                        // สามารถเพิ่ม error text ได้ถ้าต้องการ
+                                      });
+                                    }
+                                  : null,
+                              decoration: InputDecoration(
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                                fillColor: Colors.white,
+                                filled: true,
+                                hintText: _selectedDoctorId != null ? null : 'กรุณาเลือกแพทย์ก่อน',
+                              ),
+                            ),
+                            // สามารถเพิ่ม error text ได้ถ้าต้องการ เช่น
+                            // if (_timeErrorText != null)
+                            //   Padding(
+                            //     padding: const EdgeInsets.only(top: 8.0),
+                            //     child: Text(
+                            //       _timeErrorText!,
+                            //       style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+                            //     ),
+                            //   ),
+                          ],
+                        ),
                       ),
-                    ),
                     const SizedBox(height: 24),
                     ElevatedButton(
                       onPressed: _saveEdit,

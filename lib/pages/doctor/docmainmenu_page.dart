@@ -77,17 +77,13 @@ class _DocmainmenuPageState extends State<DocmainmenuPage> {
                               final docId = data['queueDocList']?['docId'] ?? '';
                               // รองรับทั้งแบบ queueUserList: {userIdCard: 'xxx', userName: 'yyy'} และแบบ queueUserList: {userIdCard: {userName: 'yyy'}}
                               String userIdCard = '';
-                              String? userNameFromQueue;
                               final queueUserList = data['queueUserList'];
                               if (queueUserList != null) {
                                 if (queueUserList['userIdCard'] is String) {
                                   userIdCard = queueUserList['userIdCard'];
-                                  userNameFromQueue = queueUserList['userName'] as String?;
                                 } else if (queueUserList['userIdCard'] is Map) {
                                   // กรณี queueUserList: {userIdCard: {userName: ...}}
-                                  final userMap = queueUserList['userIdCard'] as Map<String, dynamic>;
                                   userIdCard = data['queueUserList']?['userIdCard']?['userName'] ?? '';
-                                  userNameFromQueue = userMap['userName'] as String?;
                                 }
                               }
                               // ตรวจสอบและสร้าง user document หากยังไม่มี
@@ -125,25 +121,34 @@ class _DocmainmenuPageState extends State<DocmainmenuPage> {
                                           doctorName = docSnap.data!['docName'] ?? '';
                                         }
                                         // ดึงชื่อจาก queueUserList ก่อน ถ้าไม่มีค่อย fallback ไป userIdCard
-                    final userName = (userNameFromQueue != null && userNameFromQueue.trim().isNotEmpty)
-                      ? userNameFromQueue
-                      : userIdCard;
-                                        return Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              'นัดหมาย $doctorName :',
-                                              style: const TextStyle(color: Colors.black87, fontSize: 14),
-                                            ),
-                                            Text(
-                                              '($queueText)',
-                                              style: const TextStyle(color: Colors.black87, fontSize: 14),
-                                            ),
-                                            Text(
-                                              'โดย $userName',
-                                              style: const TextStyle(color: Colors.black87, fontSize: 14),
-                                            ),
-                                          ],
+                                        return FutureBuilder<DocumentSnapshot>(
+                                          future: FirebaseFirestore.instance.collection('user').doc(userIdCard).get(),
+                                          builder: (context, userSnap) {
+                                            String userName = userIdCard;
+                                            if (userSnap.hasData && userSnap.data!.exists) {
+                                              final userData = userSnap.data!.data() as Map<String, dynamic>?;
+                                              if (userData != null && userData['userName'] != null && userData['userName'].toString().trim().isNotEmpty) {
+                                                userName = userData['userName'];
+                                              }
+                                            }
+                                            return Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  'นัดหมาย $doctorName :',
+                                                  style: const TextStyle(color: Colors.black87, fontSize: 14),
+                                                ),
+                                                Text(
+                                                  '($queueText)',
+                                                  style: const TextStyle(color: Colors.black87, fontSize: 14),
+                                                ),
+                                                Text(
+                                                  'โดย $userName',
+                                                  style: const TextStyle(color: Colors.black87, fontSize: 14),
+                                                ),
+                                              ],
+                                            );
+                                          },
                                         );
                                       },
                                     ),

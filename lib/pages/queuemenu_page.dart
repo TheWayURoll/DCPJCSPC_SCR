@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-
+  
+  
 class QueueMenuPage extends StatefulWidget {
-  // เพิ่มตัวแปรรับ userIdCard จาก parent
   final String userIdCard;
   QueueMenuPage({Key? key, required this.userIdCard}) : super(key: key);
 
@@ -12,13 +12,125 @@ class QueueMenuPage extends StatefulWidget {
 }
 
 class _QueueMenuPageState extends State<QueueMenuPage> {
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    fetchBookedTimes();
+  Future<void> fetchDoctors() async {
+    setState(() { isLoadingDoctors = true; });
+    final snapshot = await FirebaseFirestore.instance.collection('doctor').get();
+    final doctorNames = snapshot.docs.map((doc) => doc['docName'] as String).toList();
+    setState(() {
+      doctors = doctorNames;
+      isLoadingDoctors = false;
+    });
   }
+
+  @override
+  void initState() {
+    super.initState();
+    fetchDoctors();
+  }
+  Future<void> saveQueue() async {
+    if (!isFormValid) return;
+    String? docId;
+    if (selectedDoctor != null) {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('doctor')
+          .where('docName', isEqualTo: selectedDoctor)
+          .limit(1)
+          .get();
+      if (snapshot.docs.isNotEmpty) {
+        docId = snapshot.docs.first['docId'] as String?;
+      }
+    }
+    if (docId == null) return;
+    if (selectedTime == null) return;
+    final DateTime queueDateTime = DateTime(
+      selectedDay.year,
+      selectedDay.month,
+      selectedDay.day,
+      selectedTime!.hour,
+      selectedTime!.minute,
+    );
+    try {
+      String? queueId;
+      await FirebaseFirestore.instance.runTransaction((transaction) async {
+        final queueRef = FirebaseFirestore.instance.collection('queueLists');
+        final duplicateSnap = await queueRef
+            .where('queueDocList.docId', isEqualTo: docId)
+            .where('queueDate', isEqualTo: queueDateTime)
+            .get();
+        if (duplicateSnap.docs.isNotEmpty) {
+          throw Exception('มีการจองคิวนี้แล้ว กรุณาเลือกเวลาใหม่');
+        }
+        final queueSnapshot = await queueRef.get();
+        Set<int> usedNums = {};
+        for (var doc in queueSnapshot.docs) {
+          final id = doc.id;
+          final match = RegExp(r'queueList(\d+)').firstMatch(id);
+          if (match != null) {
+            final num = int.tryParse(match.group(1) ?? '0') ?? 0;
+            usedNums.add(num);
+          }
+        }
+        // หาเลขที่ว่างต่ำสุด
+        int nextQueueNum = 1;
+        while (usedNums.contains(nextQueueNum)) {
+          nextQueueNum++;
+        }
+        final queueDocId = 'queueList$nextQueueNum';
+        queueId = 'qi${nextQueueNum.toString().padLeft(3, '0')}';
+        transaction.set(queueRef.doc(queueDocId), {
+          'queueDate': queueDateTime,
+          'queueDocList': {'docId': docId},
+          'queueId': queueId,
+          'queueText': descriptionController.text,
+          'queueUserList': {
+            'userIdCard': widget.userIdCard,
+          },
+        });
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('บันทึกสำเร็จ')),
+        );
+        setState(() {
+          selectedDoctor = null;
+          selectedDay = DateTime.now();
+          selectedTime = null;
+          descriptionController.clear();
+          _timeErrorText = null;
+        });
+        await fetchBookedTimes();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString().replaceAll('Exception: ', ''))),
+        );
+      }
+    }
+  }
+  // State variables for queue booking and calendar
+  String? selectedDoctor;
+  DateTime selectedDay = DateTime.now();
+  TimeOfDay? selectedTime;
+  TextEditingController descriptionController = TextEditingController();
+  String? _timeErrorText;
+  List<String> doctors = [];
+  bool isLoadingDoctors = true;
+  List<DateTime> _bookedDateTimes = [];
+
+  Map<DateTime, Map<String, dynamic>> _calendarStatusMap = {};
+
+  bool get isFormValid {
+    final isDoctorSelected = selectedDoctor != null && selectedDoctor!.isNotEmpty;
+    final isDescFilled = descriptionController.text.trim().isNotEmpty;
+    final isTimeValid = selectedTime != null && ((selectedTime!.hour >= 9 && selectedTime!.hour < 17) ||
+      (selectedTime!.hour == 17 && selectedTime!.minute == 0));
+    final isMinuteValid = selectedTime != null && selectedTime!.minute % 15 == 0;
+    return isDoctorSelected && isDescFilled && isTimeValid && isMinuteValid;
+  }
+
   bool get isDoctorSelected => selectedDoctor != null && selectedDoctor!.isNotEmpty;
-  // สร้างรายการเวลา 9:00-17:00 ทุก 15 นาที (เว้น 12:00, 12:15, 17:00)
+
   List<TimeOfDay> get availableTimes {
     final List<TimeOfDay> times = [];
     for (int h = 9; h < 17; h++) {
@@ -28,32 +140,6 @@ class _QueueMenuPageState extends State<QueueMenuPage> {
       }
     }
     return times;
-  }
-  String? selectedDoctor;
-  List<String> doctors = [];
-  bool isLoadingDoctors = true;
-  DateTime selectedDay = DateTime.now();
-  TimeOfDay? selectedTime;
-  TextEditingController descriptionController = TextEditingController();
-  int queueIdCounter = 1; // ควรดึงจาก Firestore จริงเพื่อป้องกันซ้ำ (ตัวอย่างนี้ใช้ local)
-
-  // เพิ่มตัวแปรสำหรับเก็บเวลาที่ถูกจองแล้ว
-  List<DateTime> _bookedDateTimes = [];
-  String? _timeErrorText;
-
-  @override
-  void initState() {
-    super.initState();
-    fetchDoctors();
-    fetchBookedTimes();
-  }
-
-  Future<void> fetchDoctors() async {
-    final snapshot = await FirebaseFirestore.instance.collection('doctor').get();
-    setState(() {
-      doctors = snapshot.docs.map((doc) => doc['docName'] as String).toList();
-      isLoadingDoctors = false;
-    });
   }
 
   Future<void> fetchBookedTimes() async {
@@ -83,113 +169,34 @@ class _QueueMenuPageState extends State<QueueMenuPage> {
     });
   }
 
-  bool get isTimeValid {
-  if (selectedTime == null) return false;
-  return (selectedTime!.hour >= 9 && selectedTime!.hour < 17) ||
-    (selectedTime!.hour == 17 && selectedTime!.minute == 0);
-  }
-
-  bool get isFormValid {
-    final isDoctorSelected = selectedDoctor != null && selectedDoctor!.isNotEmpty;
-    final isDescFilled = descriptionController.text.trim().isNotEmpty;
-    final isTimeValid = selectedTime != null && ((selectedTime!.hour >= 9 && selectedTime!.hour < 17) ||
-      (selectedTime!.hour == 17 && selectedTime!.minute == 0));
-    final isMinuteValid = selectedTime != null && selectedTime!.minute % 15 == 0;
-    return isDoctorSelected && isDescFilled && isTimeValid && isMinuteValid;
-  }
-
-  Future<void> saveQueue() async {
-
-    if (!isFormValid) return;
-    // หา docId จากชื่อหมอ
-    String? docId;
-    if (selectedDoctor != null) {
-      final snapshot = await FirebaseFirestore.instance
-          .collection('doctor')
-          .where('docName', isEqualTo: selectedDoctor)
-          .limit(1)
-          .get();
-      if (snapshot.docs.isNotEmpty) {
-        docId = snapshot.docs.first['docId'] as String?;
-      }
-    }
+  Future<void> fetchCalendarStatus() async {
+    if (selectedDoctor == null) return;
+    final doctorSnap = await FirebaseFirestore.instance.collection('doctor')
+        .where('docName', isEqualTo: selectedDoctor)
+        .limit(1).get();
+    if (doctorSnap.docs.isEmpty) return;
+    final docId = doctorSnap.docs.first['docId'] as String?;
     if (docId == null) return;
-
-    if (selectedTime == null) return;
-    final DateTime queueDateTime = DateTime(
-      selectedDay.year,
-      selectedDay.month,
-      selectedDay.day,
-      selectedTime!.hour,
-      selectedTime!.minute,
-    );
-
-
-    try {
-      String? queueId;
-      await FirebaseFirestore.instance.runTransaction((transaction) async {
-        final queueRef = FirebaseFirestore.instance.collection('queueLists');
-        // ตรวจสอบซ้ำใน transaction
-        final duplicateSnap = await queueRef
-            .where('queueDocList.docId', isEqualTo: docId)
-            .where('queueDate', isEqualTo: queueDateTime)
-            .get();
-        if (duplicateSnap.docs.isNotEmpty) {
-          throw Exception('มีการจองคิวนี้แล้ว กรุณาเลือกเวลาใหม่');
-        }
-
-        // หา queueListN ที่ว่าง (เช่น queueList1, queueList2, ...)
-        final queueSnapshot = await queueRef.get();
-        Set<int> usedNums = {};
-        for (var doc in queueSnapshot.docs) {
-          final id = doc.id;
-          final match = RegExp(r'queueList(\d+)').firstMatch(id);
-          if (match != null) {
-            final num = int.tryParse(match.group(1) ?? '0') ?? 0;
-            usedNums.add(num);
-          }
-        }
-
-        int nextQueueNum = 1;
-        if (usedNums.isNotEmpty) {
-          nextQueueNum = usedNums.reduce((a, b) => a > b ? a : b) + 1;
-        }
-        final queueDocId = 'queueList$nextQueueNum';
-        queueId = 'qi${nextQueueNum.toString().padLeft(3, '0')}';
-
-        transaction.set(queueRef.doc(queueDocId), {
-          'queueDate': queueDateTime,
-          'queueDocList': {'docId': docId},
-          'queueId': queueId,
-          'queueText': descriptionController.text,
-          'queueUserList': {
-            'userIdCard': widget.userIdCard,
-          },
-        });
-      });
-
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('บันทึกสำเร็จ')),
-        );
-        setState(() {
-          selectedDoctor = null;
-          selectedDay = DateTime.now();
-          selectedTime = null;
-          descriptionController.clear();
-          _timeErrorText = null;
-        });
-        await fetchBookedTimes();
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString().replaceAll('Exception: ', ''))),
-        );
-      }
+    final calSnap = await FirebaseFirestore.instance.collection('docCalendar')
+        .where('calDocId', isEqualTo: docId).get();
+    final Map<DateTime, Map<String, dynamic>> statusMap = {};
+    for (var doc in calSnap.docs) {
+      final data = doc.data();
+      final ts = data['calDocDate'];
+      final date = ts is DateTime ? ts : (ts as Timestamp).toDate();
+      statusMap[DateTime(date.year, date.month, date.day)] = data;
     }
+    setState(() { _calendarStatusMap = statusMap; });
   }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    fetchBookedTimes();
+  }
+
+  // ...existing code...
+
 
   /// อัปเดต queueLists และ logHistory ที่ queueId เดียวกัน
 Future<void> updateQueueAndLogHistory({
@@ -315,9 +322,13 @@ Future<void> updateQueueAndLogHistory({
                       items: doctors
                           .map((doc) => DropdownMenuItem(value: doc, child: Text(doc)))
                           .toList(),
-                      onChanged: (value) {
-                        setState(() => selectedDoctor = value);
-                        fetchBookedTimes();
+                      onChanged: (value) async {
+                        setState(() {
+                          selectedDoctor = value;
+                          selectedTime = null; // reset time when doctor changes
+                        });
+                        await fetchBookedTimes();
+                        await fetchCalendarStatus();
                       },
                     ),
               const SizedBox(height: 18),
@@ -339,11 +350,51 @@ Future<void> updateQueueAndLogHistory({
                       focusedDay: selectedDay,
                       selectedDayPredicate: (day) => isSameDay(day, selectedDay),
                       onDaySelected: (selected, focused) {
+                        final status = _calendarStatusMap[DateTime(selected.year, selected.month, selected.day)];
+                        if (status != null) {
+                          showDialog(
+                            context: context,
+                            builder: (context) => AlertDialog(
+                              title: Text('สถานะหมอ'),
+                              content: Text('${status['calDocStatus'] ?? ''}\n${status['calDocReason'] ?? ''}'),
+                              actions: [TextButton(child: Text('ปิด'), onPressed: () => Navigator.pop(context))],
+                            ),
+                          );
+                          return;
+                        }
                         setState(() {
                           selectedDay = selected;
                         });
                         fetchBookedTimes();
                       },
+                      enabledDayPredicate: (day) {
+                        // ถ้าวันนี้มีสถานะหมอ (ไม่ว่าง/ลาพัก) จะ disable
+                        return !_calendarStatusMap.containsKey(DateTime(day.year, day.month, day.day));
+                      },
+                      calendarBuilders: CalendarBuilders(
+                        defaultBuilder: (context, day, focusedDay) {
+                          // ปกติไม่เปลี่ยนแปลง UI หลักของวัน
+                          return null;
+                        },
+                        markerBuilder: (context, day, events) {
+                          final status = _calendarStatusMap[DateTime(day.year, day.month, day.day)];
+                          if (status != null) {
+                            return Align(
+                              alignment: Alignment.bottomCenter,
+                              child: Container(
+                                width: 6,
+                                height: 6,
+                                margin: const EdgeInsets.only(bottom: 4),
+                                decoration: BoxDecoration(
+                                  color: Colors.red,
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                            );
+                          }
+                          return null;
+                        },
+                      ),
                       calendarStyle: CalendarStyle(
                         selectedDecoration: BoxDecoration(
                           color: Colors.deepPurple,
@@ -406,7 +457,9 @@ Future<void> updateQueueAndLogHistory({
                     const Text('Enter time', style: TextStyle(fontWeight: FontWeight.w500)),
                     const SizedBox(height: 8),
                     DropdownButtonFormField<TimeOfDay>(
-                      value: isDoctorSelected ? selectedTime : null,
+                      value: isDoctorSelected && selectedTime != null && availableTimes.contains(selectedTime)
+                          ? selectedTime
+                          : null,
                       items: isDoctorSelected
                           ? availableTimes.map((t) {
                               final booked = _bookedDateTimes.any((dt) =>
@@ -416,7 +469,7 @@ Future<void> updateQueueAndLogHistory({
                                   dt.hour == t.hour &&
                                   dt.minute == t.minute);
                               final label = t.format(context) + (booked ? ' (จองแล้ว)' : '');
-                              return DropdownMenuItem(
+                              return DropdownMenuItem<TimeOfDay>(
                                 value: booked ? null : t,
                                 enabled: !booked,
                                 child: Text(label, style: TextStyle(fontSize: 20, color: booked ? Colors.grey : Colors.black)),
@@ -425,7 +478,6 @@ Future<void> updateQueueAndLogHistory({
                           : [],
                       onChanged: isDoctorSelected
                           ? (t) {
-                              if (t == null) return;
                               setState(() {
                                 selectedTime = t;
                                 _timeErrorText = null;

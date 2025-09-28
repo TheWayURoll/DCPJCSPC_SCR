@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
 class DocCalworkPage extends StatefulWidget {
@@ -126,8 +127,32 @@ class _DocCalworkPageState extends State<DocCalworkPage> {
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
                   ElevatedButton(
-                    onPressed: () {
-                      // TODO: บันทึกข้อมูล
+                    onPressed: () async {
+                      if (_selectedDate == null) return;
+                      final docCalendarRef = FirebaseFirestore.instance.collection('docCalendar');
+                      final snapshot = await docCalendarRef.get();
+                      int nextNum = 1;
+                      final existingIds = snapshot.docs.map((doc) => doc.id).where((id) => id.startsWith('calDoc')).toList();
+                      if (existingIds.isNotEmpty) {
+                        final nums = existingIds.map((id) {
+                          final match = RegExp(r'calDoc(\d+)').firstMatch(id);
+                          return match != null ? int.tryParse(match.group(1) ?? '') ?? 0 : 0;
+                        }).toList();
+                        nextNum = nums.reduce((a, b) => a > b ? a : b) + 1;
+                      }
+                      final calDocId = 'calDoc$nextNum';
+                      await docCalendarRef.doc(calDocId).set({
+                        'calDocDate': _selectedDate,
+                        'calDocId': 'doc002', // สามารถแก้ไขให้รับ docId จาก context หรือ widget ได้
+                        'calDocListId': 'cd001', // สามารถแก้ไขให้รับจาก context หรือ widget ได้
+                        'calDocReason': _noteController.text,
+                        'calDocStatus': _selectedStatus,
+                      });
+
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('บันทึกตารางงานสำเร็จ')),
+                      );
+                      _resetForm();
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.deepPurple.shade400,
