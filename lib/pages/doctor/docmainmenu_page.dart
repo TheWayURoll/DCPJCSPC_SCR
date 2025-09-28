@@ -2,6 +2,7 @@ import 'package:dcpjcspc_scr/pages/doctor/doc_accout_page.dart';
 import 'package:dcpjcspc_scr/pages/doctor/doc_calwork_page.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:dcpjcspc_scr/classes/doctor/doc_managements.dart';
 
 class DocmainmenuPage extends StatefulWidget {
   final String docId;
@@ -37,7 +38,36 @@ class _DocmainmenuPageState extends State<DocmainmenuPage> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
-                      _buildMenuIcon(Icons.edit, 'จัดการคิว'),
+                      SizedBox(
+                        width: 110,
+                        height: 110,
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.white,
+                            elevation: 2,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(24),
+                            ),
+                            shadowColor: Colors.grey.withOpacity(0.3),
+                          ),
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => const DocManagements(),
+                              ),
+                            );
+                          },
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: const [
+                              Icon(Icons.edit, size: 30, color: Colors.black87),
+                              SizedBox(height: 8),
+                              Text('จัดการคิว', style: TextStyle(fontSize: 14, color: Colors.black87)),
+                            ],
+                          ),
+                        ),
+                      ),
                       _buildMenuIcon(Icons.notifications, 'ข่าวประชาสัมพันธ์'),
                       _buildMenuIcon(Icons.calendar_today, 'กิจกรรม'),
                     ],
@@ -67,12 +97,19 @@ class _DocmainmenuPageState extends State<DocmainmenuPage> {
                           return const Text('ยังไม่มีรายการคิววันนี้', style: TextStyle(color: Colors.black54));
                         }
                         final docs = snapshot.data!.docs;
+                        // จัดเรียงตามวันเวลา
+                        docs.sort((a, b) {
+                          final aDate = (a['queueDate'] as Timestamp).toDate();
+                          final bDate = (b['queueDate'] as Timestamp).toDate();
+                          return aDate.compareTo(bDate);
+                        });
                         return SingleChildScrollView(
                           child: Column(
                             children: docs.map((doc) {
                               final data = doc.data() as Map<String, dynamic>;
                               final queueDate = (data['queueDate'] as Timestamp).toDate();
                               final dateStr = '${queueDate.day}/${queueDate.month}/${queueDate.year}';
+                              final timeStr = '${queueDate.hour.toString().padLeft(2, '0')}:${queueDate.minute.toString().padLeft(2, '0')}';
                               final queueText = data['queueText'] ?? '';
                               final docId = data['queueDocList']?['docId'] ?? '';
                               // รองรับทั้งแบบ queueUserList: {userIdCard: 'xxx', userName: 'yyy'} และแบบ queueUserList: {userIdCard: {userName: 'yyy'}}
@@ -103,15 +140,12 @@ class _DocmainmenuPageState extends State<DocmainmenuPage> {
                                 decoration: BoxDecoration(
                                   color: Colors.pink[50],
                                   borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(color: Colors.pink[100]!),
-                                ),
+                                  border: Border.all(color: Colors.pink[100]!)),
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text(
-                                      dateStr,
-                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                                    ),
+                                    Text(dateStr, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                                    Text('เวลา $timeStr', style: const TextStyle(fontSize: 15)),
                                     const SizedBox(height: 8),
                                     FutureBuilder<DocumentSnapshot>(
                                       future: FirebaseFirestore.instance.collection('doctor').doc(docId).get(),
