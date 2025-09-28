@@ -166,7 +166,7 @@ class _DocmainmenuPageState extends State<DocmainmenuPage> {
             ),
           ),
           // Tab 1: ตารางงาน (mock)
-          DocCalworkPage(),
+          DocCalworkPage(docId: widget.docId),
           // Tab 2: ประวัติการจอง (mock)
           SafeArea(child: Center(child: Text('ประวัติการจอง', style: TextStyle(fontSize: 24)))),
           // Tab 3: บัญชีหมอ

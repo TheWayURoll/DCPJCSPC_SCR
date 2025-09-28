@@ -11,6 +11,7 @@ class UserQueueEdit extends StatefulWidget {
 }
 
 class _UserQueueEditState extends State<UserQueueEdit> {
+  bool _doctorSelected = false;
   // เวลาที่เลือกได้เหมือน queuemenu_page.dart
   List<TimeOfDay> get availableTimes {
     final List<TimeOfDay> times = [];
@@ -61,6 +62,7 @@ class _UserQueueEditState extends State<UserQueueEdit> {
   String? _selectedDoctorId;
   bool _loading = true;
   List<Map<String, dynamic>> _doctors = [];
+  Map<DateTime, Map<String, dynamic>> _calendarStatusMap = {};
 
   @override
   void initState() {
@@ -75,7 +77,8 @@ class _UserQueueEditState extends State<UserQueueEdit> {
     _selectedDate = queueDate?.toDate();
     _selectedTime = _selectedDate != null ? TimeOfDay(hour: _selectedDate!.hour, minute: _selectedDate!.minute) : null;
     _descController.text = data['queueText'] ?? '';
-    _selectedDoctorId = data['queueDocList']?['docId'];
+  _selectedDoctorId = data['queueDocList']?['docId'];
+  _doctorSelected = false; // ยังไม่ได้เลือกหมอใหม่
 
     // ดึงรายชื่อหมอทั้งหมด
     final doctorSnap = await FirebaseFirestore.instance.collection('doctor').get();
@@ -92,6 +95,20 @@ class _UserQueueEditState extends State<UserQueueEdit> {
     setState(() { _loading = false; });
   }
 
+  Future<void> fetchCalendarStatus() async {
+    if (_selectedDoctorId == null) return;
+    final calSnap = await FirebaseFirestore.instance.collection('docCalendar')
+        .where('calDocId', isEqualTo: _selectedDoctorId)
+        .get();
+    final Map<DateTime, Map<String, dynamic>> statusMap = {};
+    for (var doc in calSnap.docs) {
+      final data = doc.data();
+      final ts = data['calDocDate'];
+      final date = ts is DateTime ? ts : (ts as Timestamp).toDate();
+      statusMap[DateTime(date.year, date.month, date.day)] = data;
+    }
+    if (mounted) setState(() { _calendarStatusMap = statusMap; });
+  }
 
   Future<void> _saveEdit() async {
     if (!_formKey.currentState!.validate() || _selectedDate == null || _selectedTime == null || _selectedDoctorId == null) return;
@@ -129,8 +146,10 @@ class _UserQueueEditState extends State<UserQueueEdit> {
                       onChanged: (val) async {
                         setState(() {
                           _selectedDoctorId = val;
+                          _doctorSelected = true;
                         });
                         await fetchBookedTimes();
+                        await fetchCalendarStatus();
                       },
                       decoration: const InputDecoration(labelText: 'เลือกแพทย์'),
                     ),
@@ -140,6 +159,7 @@ class _UserQueueEditState extends State<UserQueueEdit> {
                       maxLines: 2,
                       decoration: const InputDecoration(labelText: 'คำอธิบาย'),
                       validator: (v) => v == null || v.isEmpty ? 'กรุณากรอกคำอธิบาย' : null,
+                      enabled: _doctorSelected,
                     ),
                     const SizedBox(height: 16),
                     Row(
@@ -148,18 +168,24 @@ class _UserQueueEditState extends State<UserQueueEdit> {
                           child: Text(_selectedDate == null ? '' : '${_selectedDate!.day}/${_selectedDate!.month}/${_selectedDate!.year}'),
                         ),
                         TextButton(
-                          onPressed: () async {
-                            final picked = await showDatePicker(
-                              context: context,
-                              initialDate: _selectedDate ?? DateTime.now(),
-                              firstDate: DateTime.now(),
-                              lastDate: DateTime(2100),
-                            );
-                            if (picked != null) {
-                              setState(() => _selectedDate = picked);
-                              await fetchBookedTimes();
-                            }
-                          },
+                          onPressed: _doctorSelected
+                              ? () async {
+                                  final picked = await showDatePicker(
+                                    context: context,
+                                    initialDate: _selectedDate ?? DateTime.now(),
+                                    firstDate: DateTime.now(),
+                                    lastDate: DateTime(2100),
+                                    selectableDayPredicate: (day) {
+                                      final normalizedDay = DateTime(day.year, day.month, day.day);
+                                      return !_calendarStatusMap.containsKey(normalizedDay);
+                                    },
+                                  );
+                                  if (picked != null) {
+                                    setState(() => _selectedDate = picked);
+                                    await fetchBookedTimes();
+                                  }
+                                }
+                              : null,
                           child: const Text('เลือกวันที่'),
                         ),
                       ],
@@ -179,7 +205,7 @@ class _UserQueueEditState extends State<UserQueueEdit> {
                               value: _selectedDoctorId != null && _selectedTime != null && availableTimes.contains(_selectedTime)
                                   ? _selectedTime
                                   : null,
-                              items: _selectedDoctorId != null
+                              items: _doctorSelected
                                   ? availableTimes.map((t) {
                                       final booked = isTimeBooked(t);
                                       final label = t.format(context) + (booked ? ' (จองแล้ว)' : '');
@@ -190,11 +216,10 @@ class _UserQueueEditState extends State<UserQueueEdit> {
                                       );
                                     }).toList()
                                   : [],
-                              onChanged: _selectedDoctorId != null
+                              onChanged: _doctorSelected
                                   ? (t) {
                                       setState(() {
                                         _selectedTime = t;
-                                        // สามารถเพิ่ม error text ได้ถ้าต้องการ
                                       });
                                     }
                                   : null,
@@ -202,8 +227,9 @@ class _UserQueueEditState extends State<UserQueueEdit> {
                                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                                 fillColor: Colors.white,
                                 filled: true,
-                                hintText: _selectedDoctorId != null ? null : 'กรุณาเลือกแพทย์ก่อน',
+                                hintText: _doctorSelected ? null : 'กรุณาเลือกแพทย์ก่อน',
                               ),
+                              disabledHint: const Text('กรุณาเลือกแพทย์ก่อน'),
                             ),
                             // สามารถเพิ่ม error text ได้ถ้าต้องการ เช่น
                             // if (_timeErrorText != null)

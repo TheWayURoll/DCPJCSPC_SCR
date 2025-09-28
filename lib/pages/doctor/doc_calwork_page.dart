@@ -2,7 +2,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
 class DocCalworkPage extends StatefulWidget {
-  const DocCalworkPage({super.key});
+  final String docId;
+  const DocCalworkPage({super.key, required this.docId});
 
   @override
   State<DocCalworkPage> createState() => _DocCalworkPageState();
@@ -141,10 +142,11 @@ class _DocCalworkPageState extends State<DocCalworkPage> {
                         nextNum = nums.reduce((a, b) => a > b ? a : b) + 1;
                       }
                       final calDocId = 'calDoc$nextNum';
+                      final calDocListId = 'cd${nextNum.toString().padLeft(3, '0')}';
                       await docCalendarRef.doc(calDocId).set({
                         'calDocDate': _selectedDate,
-                        'calDocId': 'doc002', // สามารถแก้ไขให้รับ docId จาก context หรือ widget ได้
-                        'calDocListId': 'cd001', // สามารถแก้ไขให้รับจาก context หรือ widget ได้
+                        'calDocId': widget.docId, // รับ docId จากบัญชีที่เข้าสู่ระบบ
+                        'calDocListId': calDocListId, // อ้างอิงตาม calDoc ที่สร้างขึ้น
                         'calDocReason': _noteController.text,
                         'calDocStatus': _selectedStatus,
                       });

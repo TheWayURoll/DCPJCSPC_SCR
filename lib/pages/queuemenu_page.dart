@@ -184,9 +184,16 @@ class _QueueMenuPageState extends State<QueueMenuPage> {
       final data = doc.data();
       final ts = data['calDocDate'];
       final date = ts is DateTime ? ts : (ts as Timestamp).toDate();
-      statusMap[DateTime(date.year, date.month, date.day)] = data;
+      // Normalize date to year, month, day only
+      final normalizedDate = DateTime(date.year, date.month, date.day);
+      statusMap[normalizedDate] = data;
     }
     setState(() { _calendarStatusMap = statusMap; });
+    print('StatusMap keys:');
+    for (final k in _calendarStatusMap.keys) {
+      print(k.toIso8601String());
+    }
+    print('StatusMap: $_calendarStatusMap');
   }
 
   @override
@@ -194,9 +201,6 @@ class _QueueMenuPageState extends State<QueueMenuPage> {
     super.didChangeDependencies();
     fetchBookedTimes();
   }
-
-  // ...existing code...
-
 
   /// อัปเดต queueLists และ logHistory ที่ queueId เดียวกัน
 Future<void> updateQueueAndLogHistory({
@@ -373,7 +377,35 @@ Future<void> updateQueueAndLogHistory({
                       },
                       calendarBuilders: CalendarBuilders(
                         defaultBuilder: (context, day, focusedDay) {
-                          // ปกติไม่เปลี่ยนแปลง UI หลักของวัน
+                          final normalizedDay = DateTime(day.year, day.month, day.day);
+                          final status = _calendarStatusMap[normalizedDay];
+                          if (status != null) {
+                            return Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Container(
+                                  decoration: const BoxDecoration(
+                                    color: Colors.red,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  width: 36,
+                                  height: 36,
+                                  alignment: Alignment.center,
+                                  child: Text(
+                                    '${day.day}',
+                                    style: const TextStyle(fontSize: 16, color: Colors.white, fontWeight: FontWeight.bold),
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  status['calDocStatus'] ?? '',
+                                  style: const TextStyle(fontSize: 10, color: Colors.red, fontWeight: FontWeight.bold),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
+                            );
+                          }
                           return null;
                         },
                         markerBuilder: (context, day, events) {
@@ -434,12 +466,47 @@ Future<void> updateQueueAndLogHistory({
                     initialDate: selectedDay,
                     firstDate: DateTime.now(),
                     lastDate: DateTime(2030),
+                    selectableDayPredicate: (day) {
+                      final normalizedDay = DateTime(day.year, day.month, day.day);
+                      // ปิดไม่ให้เลือกวันที่ที่มีสถานะหมอ
+                      return !_calendarStatusMap.containsKey(normalizedDay);
+                    },
                   );
                   if (picked != null) {
                     setState(() => selectedDay = picked);
                   } else {
                     setState(() {}); // เพื่อให้ปุ่มอัปเดตแม้ไม่ได้เลือกวันใหม่
                   }
+                },
+              ),
+              // แสดงสถานะหมอใต้ช่องเลือกวันที่
+              Builder(
+                builder: (context) {
+                  final normalizedDay = DateTime(selectedDay.year, selectedDay.month, selectedDay.day);
+                  final status = _calendarStatusMap[normalizedDay];
+                  if (status != null) {
+                    return Padding(
+                      padding: const EdgeInsets.only(top: 8.0),
+                      child: Row(
+                        children: [
+                          Icon(Icons.info, color: Colors.red, size: 18),
+                          const SizedBox(width: 6),
+                          Text(
+                            status['calDocStatus'] ?? '',
+                            style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+                          ),
+                          if ((status['calDocReason'] ?? '').toString().isNotEmpty) ...[
+                            const SizedBox(width: 8),
+                            Text(
+                              status['calDocReason'],
+                              style: const TextStyle(color: Colors.black54),
+                            ),
+                          ]
+                        ],
+                      ),
+                    );
+                  }
+                  return SizedBox.shrink();
                 },
               ),
               const SizedBox(height: 18),
