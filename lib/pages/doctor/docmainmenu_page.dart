@@ -123,16 +123,6 @@ class _DocmainmenuPageState extends State<DocmainmenuPage> {
                                   userIdCard = data['queueUserList']?['userIdCard']?['userName'] ?? '';
                                 }
                               }
-                              // ตรวจสอบและสร้าง user document หากยังไม่มี
-                              Future<void> ensureUserDocument(String userIdCard) async {
-                                final userDoc = await FirebaseFirestore.instance.collection('user').doc(userIdCard).get();
-                                if (!userDoc.exists) {
-                                  await FirebaseFirestore.instance.collection('user').doc(userIdCard).set({
-                                    'userName': userIdCard,
-                                  });
-                                }
-                              }
-                              ensureUserDocument(userIdCard);
                               return Container(
                                 width: double.infinity,
                                 margin: const EdgeInsets.only(bottom: 12),
