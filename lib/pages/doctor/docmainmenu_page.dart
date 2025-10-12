@@ -3,7 +3,6 @@ import 'package:dcpjcspc_scr/pages/doctor/doc_calwork_page.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:dcpjcspc_scr/classes/doctor/doc_managements.dart';
-import 'package:dcpjcspc_scr/pages/fake_notification.dart';
 
 class DocmainmenuPage extends StatefulWidget {
   final String docId;
@@ -55,7 +54,7 @@ class _DocmainmenuPageState extends State<DocmainmenuPage> {
                             Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (context) => const DocManagements(),
+                                builder: (context) => DocManagements(docId: widget.docId),
                               ),
                             );
                           },
@@ -88,8 +87,6 @@ class _DocmainmenuPageState extends State<DocmainmenuPage> {
                       stream: FirebaseFirestore.instance
                           .collection('queueLists')
                           .where('queueDocList.docId', isEqualTo: widget.docId)
-                          .where('queueDate', isGreaterThanOrEqualTo: DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day))
-                          .where('queueDate', isLessThan: DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day + 1))
                           .snapshots(),
                       builder: (context, snapshot) {
                         if (snapshot.connectionState == ConnectionState.waiting) {
@@ -98,16 +95,32 @@ class _DocmainmenuPageState extends State<DocmainmenuPage> {
                         if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
                           return const Text('ยังไม่มีรายการคิววันนี้', style: TextStyle(color: Colors.black54));
                         }
-                        final docs = snapshot.data!.docs;
-                        docs.sort((a, b) {
+                        
+                        // กรองเฉพาะคิววันนี้ และเรียงลำดับ
+                        final now = DateTime.now();
+                        final today = DateTime(now.year, now.month, now.day);
+                        final tomorrow = today.add(const Duration(days: 1));
+                        
+                        final todayDocs = snapshot.data!.docs.where((doc) {
+                          final data = doc.data() as Map<String, dynamic>;
+                          final queueDate = (data['queueDate'] as Timestamp).toDate();
+                          return queueDate.isAfter(today.subtract(const Duration(seconds: 1))) && 
+                                 queueDate.isBefore(tomorrow);
+                        }).toList();
+                        
+                        if (todayDocs.isEmpty) {
+                          return const Text('ยังไม่มีรายการคิววันนี้', style: TextStyle(color: Colors.black54));
+                        }
+                        
+                        todayDocs.sort((a, b) {
                           final aDate = (a['queueDate'] as Timestamp).toDate();
                           final bDate = (b['queueDate'] as Timestamp).toDate();
                           return aDate.compareTo(bDate);
                         });
                         return ListView.builder(
-                          itemCount: docs.length,
+                          itemCount: todayDocs.length,
                           itemBuilder: (context, index) {
-                            final doc = docs[index];
+                            final doc = todayDocs[index];
                             final data = doc.data() as Map<String, dynamic>;
                             final queueDate = (data['queueDate'] as Timestamp).toDate();
                             final dateStr = '${queueDate.day}/${queueDate.month}/${queueDate.year}';
@@ -136,7 +149,6 @@ class _DocmainmenuPageState extends State<DocmainmenuPage> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                     children: [
                                       Column(
                                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -144,37 +156,6 @@ class _DocmainmenuPageState extends State<DocmainmenuPage> {
                                           Text(dateStr, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                                           Text('เวลา $timeStr', style: const TextStyle(fontSize: 15)),
                                         ],
-                                      ),
-                                      // ปุ่มแจ้งเตือน
-                                      ElevatedButton.icon(
-                                        onPressed: () {
-                                          // สร้าง notification ปลอม
-                                          FakeNotification.showAppointmentNotification(
-                                            doctorName: data['queueDocList']?['docName'] ?? 'หมอ',
-                                            queueText: queueText,
-                                            queueDate: queueDate,
-                                            queueId: doc.id,
-                                          );
-                                          
-                                          // แสดง snackbar ยืนยัน
-                                          ScaffoldMessenger.of(context).showSnackBar(
-                                            SnackBar(
-                                              content: Text('สร้างการแจ้งเตือนสำหรับ ${data['queueDocList']?['docName'] ?? 'หมอ'} แล้ว'),
-                                              backgroundColor: Colors.green,
-                                              duration: const Duration(seconds: 2),
-                                            ),
-                                          );
-                                        },
-                                        icon: const Icon(Icons.notifications_active, size: 16, color: Colors.white),
-                                        label: const Text('แจ้งเตือน', style: TextStyle(fontSize: 12, color: Colors.white)),
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor: Colors.orange,
-                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                          minimumSize: const Size(80, 32),
-                                          shape: RoundedRectangleBorder(
-                                            borderRadius: BorderRadius.circular(8),
-                                          ),
-                                        ),
                                       ),
                                     ],
                                   ),

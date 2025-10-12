@@ -3,7 +3,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:dcpjcspc_scr/classes/doctor/doc_queue_edit.dart';
 
 class DocManagements extends StatefulWidget {
-  const DocManagements({super.key});
+  final String docId;
+  const DocManagements({super.key, required this.docId});
 
   @override
   State<DocManagements> createState() => _DocManagementsState();
@@ -44,13 +45,16 @@ class _DocManagementsState extends State<DocManagements> {
             const SizedBox(height: 32),
             Expanded(
               child: StreamBuilder<QuerySnapshot>(
-                stream: FirebaseFirestore.instance.collection('queueLists').snapshots(),
+                stream: FirebaseFirestore.instance
+                    .collection('queueLists')
+                    .where('queueDocList.docId', isEqualTo: widget.docId)
+                    .snapshots(),
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.waiting) {
                     return const Center(child: CircularProgressIndicator());
                   }
                   if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                    return const Center(child: Text('ไม่มีรายการนัดหมาย', style: TextStyle(fontSize: 18)));
+                    return const Center(child: Text('ไม่มีรายการนัดหมายของคุณ', style: TextStyle(fontSize: 18)));
                   }
                   final docs = snapshot.data!.docs;
                   // จัดเรียงตามวันเวลา

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-class AdminHistorylist extends StatelessWidget {
-  const AdminHistorylist({super.key});
+class AdminHistoryCard extends StatelessWidget {
+  const AdminHistoryCard({super.key});
 
   @override
   Widget build(BuildContext context) {
