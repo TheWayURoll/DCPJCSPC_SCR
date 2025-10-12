@@ -1,4 +1,8 @@
+import 'package:dcpjcspc_scr/pages/admin/admin_accout.dart';
+import 'package:dcpjcspc_scr/pages/admin/admin_historylist.dart';
+import 'package:dcpjcspc_scr/classes/admin/admin_managements.dart';
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class AdminmainmenuPage extends StatefulWidget {
   final String adminId;
@@ -9,8 +13,241 @@ class AdminmainmenuPage extends StatefulWidget {
 }
 
 class _AdminmainmenuPageState extends State<AdminmainmenuPage> {
+  int _selectedIndex = 0;
+
+  void _onItemTapped(int index) {
+    setState(() {
+      _selectedIndex = index;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold();
+    return Scaffold(
+      backgroundColor: Colors.grey[100],
+      body: IndexedStack(
+        index: _selectedIndex,
+        children: [
+          // Tab 0: หน้าหลักแอดมิน
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      SizedBox(
+                        width: 110,
+                        height: 110,
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.white,
+                            elevation: 2,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(24),
+                            ),
+                            shadowColor: Colors.grey.withOpacity(0.3),
+                          ),
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => const AdminManagements(),
+                              ),
+                            );
+                          },
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: const [
+                              Icon(Icons.people, size: 30, color: Colors.black87),
+                              SizedBox(height: 8),
+                              Text('จัดการผู้ใช้', style: TextStyle(fontSize: 12, color: Colors.black87)),
+                            ],
+                          ),
+                        ),
+                      ),
+                      _buildMenuIcon(Icons.notifications, 'ข่าวประชาสัมพันธ์'),
+                      _buildMenuIcon(Icons.calendar_today, 'กิจกรรม'),
+                    ],
+                  ),
+                  const SizedBox(height: 30),
+                  Text(
+                    'รายการนัดหมายทั้งหมด',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black87,
+                    ),
+                  ),
+                  const SizedBox(height: 15),
+                  Expanded(
+                    child: StreamBuilder<QuerySnapshot>(
+                      stream: FirebaseFirestore.instance.collection('queueLists').snapshots(),
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState == ConnectionState.waiting) {
+                          return const Center(child: CircularProgressIndicator());
+                        }
+                        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                          return const Text('ยังไม่มีรายการนัดหมาย', style: TextStyle(color: Colors.black54));
+                        }
+                        final docs = snapshot.data!.docs;
+                        // จัดเรียงตามวันเวลา
+                        docs.sort((a, b) {
+                          final aDate = (a['queueDate'] as Timestamp).toDate();
+                          final bDate = (b['queueDate'] as Timestamp).toDate();
+                          return aDate.compareTo(bDate);
+                        });
+                        return SingleChildScrollView(
+                          child: Column(
+                            children: docs.map((doc) {
+                              final data = doc.data() as Map<String, dynamic>;
+                              final queueDate = (data['queueDate'] as Timestamp).toDate();
+                              final dateStr = '${queueDate.day}/${queueDate.month}/${queueDate.year}';
+                              final timeStr = '${queueDate.hour.toString().padLeft(2, '0')}:${queueDate.minute.toString().padLeft(2, '0')}';
+                              final queueText = data['queueText'] ?? '';
+                              final docId = data['queueDocList']?['docId'] ?? '';
+                              String userIdCard = '';
+                              final queueUserList = data['queueUserList'];
+                              if (queueUserList != null) {
+                                if (queueUserList['userIdCard'] is String) {
+                                  userIdCard = queueUserList['userIdCard'];
+                                } else if (queueUserList['userIdCard'] is Map) {
+                                  userIdCard = data['queueUserList']?['userIdCard']?['userName'] ?? '';
+                                }
+                              }
+                              return Container(
+                                width: double.infinity,
+                                margin: const EdgeInsets.only(bottom: 12),
+                                padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  color: Colors.blue[50],
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: Colors.blue[100]!)),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(dateStr, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                                    Text('เวลา $timeStr', style: const TextStyle(fontSize: 15)),
+                                    const SizedBox(height: 8),
+                                    FutureBuilder<DocumentSnapshot>(
+                                      future: FirebaseFirestore.instance.collection('doctor').doc(docId).get(),
+                                      builder: (context, docSnap) {
+                                        String doctorName = '';
+                                        if (docSnap.hasData && docSnap.data!.exists) {
+                                          doctorName = docSnap.data!['docName'] ?? '';
+                                        }
+                                        return FutureBuilder<DocumentSnapshot>(
+                                          future: FirebaseFirestore.instance.collection('user').doc(userIdCard).get(),
+                                          builder: (context, userSnap) {
+                                            String userName = userIdCard;
+                                            if (userSnap.hasData && userSnap.data!.exists) {
+                                              final userData = userSnap.data!.data() as Map<String, dynamic>?;
+                                              if (userData != null && userData['userName'] != null && userData['userName'].toString().trim().isNotEmpty) {
+                                                userName = userData['userName'];
+                                              }
+                                            }
+                                            return Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  'นัดหมาย $doctorName :',
+                                                  style: const TextStyle(color: Colors.black87, fontSize: 14),
+                                                ),
+                                                Text(
+                                                  '($queueText)',
+                                                  style: const TextStyle(color: Colors.black87, fontSize: 14),
+                                                ),
+                                                Text(
+                                                  'โดย $userName',
+                                                  style: const TextStyle(color: Colors.black87, fontSize: 14),
+                                                ),
+                                              ],
+                                            );
+                                          },
+                                        );
+                                      },
+                                    ),
+                                  ],
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          // Tab 1: ประวัตินัดหมาย (mock)
+          AdminHistorylist(),
+          // Tab 2: บัญชีแอดมิน (mock)
+          AdminAccout(adminId: widget.adminId),
+        ],
+      ),
+      bottomNavigationBar: BottomNavigationBar(
+        type: BottomNavigationBarType.fixed,
+        currentIndex: _selectedIndex,
+        onTap: _onItemTapped,
+        selectedItemColor: Colors.blue.shade400,
+        unselectedItemColor: Colors.grey,
+        items: const [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.home),
+            label: 'หน้าหลัก',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.history),
+            label: 'ประวัตินัดหมาย',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.person),
+            label: 'บัญชี',
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMenuIcon(IconData icon, String label) {
+    return Container(
+      width: 100,
+      height: 100,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withOpacity(0.3),
+            spreadRadius: 2,
+            blurRadius: 5,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            icon,
+            size: 35,
+            color: Colors.black87,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            label,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              color: Colors.black87,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

@@ -1,3 +1,4 @@
+//import 'package:dcpjcspc_scr/pages/fake_notification.dart';
 import 'package:dcpjcspc_scr/pages/historylist_page.dart';
 import 'package:flutter/material.dart';
 import 'package:dcpjcspc_scr/pages/accouts_page.dart';
@@ -126,6 +127,52 @@ class _MainmenuPageState extends State<MainmenuPage> {
     });
   }
 
+  // ฟังก์ชันสำหรับยกเลิกนัดหมาย
+  Future<void> _cancelAppointment(String docId, String title) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text(title),
+          content: const Text('คุณต้องการยกเลิกนัดหมายนี้หรือไม่?\nเมื่อยกเลิกแล้วจะไม่สามารถกู้คืนได้'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('ยกเลิก', style: TextStyle(color: Colors.grey)),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('ยืนยัน', style: TextStyle(color: Colors.red)),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed == true) {
+      try {
+        await FirebaseFirestore.instance.collection('queueLists').doc(docId).delete();
+        setState(() {});
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('ยกเลิกนัดหมายเรียบร้อยแล้ว'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('เกิดข้อผิดพลาดในการยกเลิกนัดหมาย'),
+            backgroundColor: Colors.red,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -226,6 +273,14 @@ class _MainmenuPageState extends State<MainmenuPage> {
                                         ],
                                       ),
                                     ),
+                                    // ปุ่มยกเลิกนัดหมาย
+                                    IconButton(
+                                      icon: const Icon(Icons.cancel, color: Colors.orange),
+                                      onPressed: () async {
+                                        await _cancelAppointment(doc.id, 'ยกเลิกนัดหมาย');
+                                      },
+                                      tooltip: 'ยกเลิกนัดหมาย',
+                                    ),
                                     IconButton(
                                       icon: const Icon(Icons.edit, color: Colors.black54),
                                       onPressed: () async {
@@ -240,13 +295,14 @@ class _MainmenuPageState extends State<MainmenuPage> {
                                         );
                                         if (result == true) setState(() {});
                                       },
+                                      tooltip: 'แก้ไขนัดหมาย',
                                     ),
                                     IconButton(
                                       icon: const Icon(Icons.delete, color: Colors.red),
                                       onPressed: () async {
-                                        await FirebaseFirestore.instance.collection('queueLists').doc(doc.id).delete();
-                                        setState(() {});
+                                        await _cancelAppointment(doc.id, 'ลบรายการนัดหมาย');
                                       },
+                                      tooltip: 'ลบรายการนัดหมาย',
                                     ),
                                   ],
                                 ),

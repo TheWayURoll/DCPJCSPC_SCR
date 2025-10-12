@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:dcpjcspc_scr/classes/doctor/doc_queue_edit.dart';
+import 'package:dcpjcspc_scr/classes/admin/admin_queue_edit.dart';
 
-class DocManagements extends StatefulWidget {
-  const DocManagements({super.key});
+class AdminManagements extends StatefulWidget {
+  const AdminManagements({super.key});
 
   @override
-  State<DocManagements> createState() => _DocManagementsState();
+  State<AdminManagements> createState() => _AdminManagementsState();
 }
 
-class _DocManagementsState extends State<DocManagements> {
+class _AdminManagementsState extends State<AdminManagements> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -134,7 +134,7 @@ class _DocManagementsState extends State<DocManagements> {
                                             ),
                                             TextButton(
                                               onPressed: () => Navigator.of(context).pop(true),
-                                              child: const Text('ยืนยัน', style: TextStyle(color: Colors.red)),
+                                              child: const Text('ลบ', style: TextStyle(color: Colors.red)),
                                             ),
                                           ],
                                         ),
@@ -148,13 +148,16 @@ class _DocManagementsState extends State<DocManagements> {
                                   ),
                                   const SizedBox(width: 16),
                                   TextButton(
-                                    onPressed: () {
-                                      Navigator.push(
+                                    onPressed: () async {
+                                      final result = await Navigator.push(
                                         context,
                                         MaterialPageRoute(
-                                          builder: (context) => DocQueueEdit(queueDocId: docs[index].id),
+                                          builder: (context) => AdminQueueEdit(queueDocId: docs[index].id),
                                         ),
                                       );
+                                      if (result == true && mounted) {
+                                        setState(() {});
+                                      }
                                     },
                                     child: const Text('แก้ไขคิว', style: TextStyle(color: Color(0xFF6C5A8E), fontSize: 16)),
                                   ),
@@ -162,8 +165,14 @@ class _DocManagementsState extends State<DocManagements> {
                                   TextButton(
                                     onPressed: () {
                                       // TODO: เพิ่มฟังก์ชันยอมรับคิว
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(
+                                          content: Text('อนุมัติคิวเรียบร้อยแล้ว'),
+                                          backgroundColor: Colors.green,
+                                        ),
+                                      );
                                     },
-                                    child: const Text('ยอมรับ', style: TextStyle(color: Colors.green, fontSize: 16)),
+                                    child: const Text('อนุมัติ', style: TextStyle(color: Colors.green, fontSize: 16)),
                                   ),
                                 ],
                               ),
