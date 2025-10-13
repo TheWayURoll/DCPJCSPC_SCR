@@ -11,6 +11,60 @@ class DocManagements extends StatefulWidget {
 }
 
 class _DocManagementsState extends State<DocManagements> {
+  
+  // ฟังก์ชันสร้างประวัติรายการนัดหมาย
+  Future<void> addHislog(QueryDocumentSnapshot queueDoc) async {
+    final data = queueDoc.data() as Map<String, dynamic>;
+    final queueText = data['queueText'] ?? '';
+    final docId = data['queueDocList']?['docId'] ?? '';
+    final queueUserList = data['queueUserList'];
+    
+    String userIdCard = '';
+    
+    if (queueUserList != null) {
+      if (queueUserList['userIdCard'] != null && queueUserList['userIdCard'] is String) {
+        userIdCard = queueUserList['userIdCard'];
+      } else if (queueUserList['userIdCard'] is Map && queueUserList['userIdCard']['userIdCard'] != null) {
+        userIdCard = queueUserList['userIdCard']['userIdCard'];
+      }
+    }
+
+    // หา ID ลำดับถัดไป
+    final snapshot = await FirebaseFirestore.instance.collection('historyLists').get();
+    final nextNumber = snapshot.docs.length + 1;
+    
+    // สร้าง ID แบบลำดับ
+    final logHisId = 'logHL${nextNumber.toString().padLeft(3, '0')}'; // logHL001, logHL002, ...
+    final documentId = 'logHistoryLists$nextNumber'; // logHistoryLists1, logHistoryLists2, ...
+    
+    // สร้างข้อมูลประวัติ
+    final historyData = {
+      'logHisDate': DateTime.now(),
+      'logHisDocId': {
+        'docId': docId,
+      },
+      'logHisId': logHisId,
+      'logHisText': queueText,
+      'logHisUserId': {
+        'userIdCard': userIdCard,
+      },
+    };
+
+    // บันทึกประวัติลงฐานข้อมูล
+    await FirebaseFirestore.instance
+        .collection('historyLists')
+        .doc(documentId)
+        .set(historyData);
+    
+    // ลบรายการนัดหมายออกจาก queueLists
+    await FirebaseFirestore.instance
+        .collection('queueLists')
+        .doc(queueDoc.id)
+        .delete();
+        
+    print('Created history: $logHisId (doc: $documentId) and removed from queue');
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -164,8 +218,28 @@ class _DocManagementsState extends State<DocManagements> {
                                   ),
                                   const SizedBox(width: 16),
                                   TextButton(
-                                    onPressed: () {
-                                      // TODO: เพิ่มฟังก์ชันยอมรับคิว
+                                    onPressed: () async {
+                                      try {
+                                        // สร้างประวัติรายการนัดหมาย
+                                        await addHislog(docs[index]);
+                                        
+                                        // แสดงข้อความยืนยัน
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          const SnackBar(
+                                            content: Text('ยอมรับคิวสำเร็จ! สร้างประวัติการนัดหมายเรียบร้อยแล้ว'),
+                                            backgroundColor: Colors.green,
+                                            duration: Duration(seconds: 3),
+                                          ),
+                                        );
+                                      } catch (e) {
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          const SnackBar(
+                                            content: Text('เกิดข้อผิดพลาดในการยอมรับคิว'),
+                                            backgroundColor: Colors.red,
+                                            duration: Duration(seconds: 2),
+                                          ),
+                                        );
+                                      }
                                     },
                                     child: const Text('ยอมรับ', style: TextStyle(color: Colors.green, fontSize: 16)),
                                   ),

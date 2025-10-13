@@ -1,4 +1,3 @@
-//import 'package:dcpjcspc_scr/pages/fake_notification.dart';
 import 'package:dcpjcspc_scr/pages/historylist_page.dart';
 import 'package:flutter/material.dart';
 import 'package:dcpjcspc_scr/pages/accouts_page.dart';
@@ -321,7 +320,7 @@ class _MainmenuPageState extends State<MainmenuPage> {
           // Tab 1: จองคิว (queue menu)
           QueueMenuPage(userIdCard: widget.userIdCard),
           // Tab 2: ประวัติการจอง (history list)
-          HistoryListPage(userIdCard: widget.userIdCard),
+          HistorylistPage(userId: widget.userIdCard),
           // Tab 3: บัญชี
           AccoutsPage(userIdCard: widget.userIdCard),
         ],

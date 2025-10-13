@@ -1,199 +1,173 @@
-// ...existing code...
 import 'package:flutter/material.dart';
+import 'package:dcpjcspc_scr/widgets/history_Cards/user_history_card.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-// เรียกใช้หลังเพิ่ม logHistory ใหม่ทุกครั้ง
-Future<void> enforceLogHistoryLimit(String userIdCard, {int maxCount = 50}) async {
-  final query = await FirebaseFirestore.instance
-      .collection('logHistory')
-      .where('userIdCard', isEqualTo: userIdCard)
-      .orderBy('queueDate') // ต้องมี field queueDate ใน logHistory
-      .get();
-  final docs = query.docs;
-  if (docs.length > maxCount) {
-    final overDocs = docs.take(docs.length - maxCount);
-    final batch = FirebaseFirestore.instance.batch();
-    for (var doc in overDocs) {
-      batch.delete(doc.reference);
-    }
-    await batch.commit();
-  }
-}
-
-// ดึงชื่อหมอทั้งหมดแบบ batch เพื่อลด FutureBuilder ซ้อน
-Future<Map<String, String>> _fetchDoctorNames(List<String> docIds) async {
-  if (docIds.isEmpty) return {};
-  final snap = await FirebaseFirestore.instance.collection('doctor').where('docId', whereIn: docIds).get();
-  return {for (var d in snap.docs) d['docId'] as String: d['docName'] as String};
-}
-
-class HistoryListPage extends StatefulWidget {
-  final String userIdCard;
-  const HistoryListPage({Key? key, required this.userIdCard}) : super(key: key);
-
-  @override
-  State<HistoryListPage> createState() => _HistoryListPageState();
-}
-
-class _HistoryListPageState extends State<HistoryListPage> {
-  Map<String, String> _doctorMap = {};
-  List<DocumentSnapshot> _docs = [];
-  bool _loading = true;
-  bool _loadedOnce = false;
-  // Map<String, Map<String, dynamic>> _queueDetailMap = {}; // เก็บข้อมูล queueText, queueDate จาก queueLists
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    if (!_loadedOnce) {
-      _fetchHistory();
-      _loadedOnce = true;
-      // รีเฟรชอีกครั้งหลัง build เสร็จ (เช่นเมื่อกดปุ่มเมนูเข้าหน้านี้)
-      Future.delayed(const Duration(milliseconds: 300), () {
-        if (mounted) _fetchHistory();
-      });
-    }
-  }
-
-  Future<void> _fetchHistory() async {
-    setState(() {
-      _loading = true;
-    });
-  final snapshot = await FirebaseFirestore.instance
-    .collection('logHistory')
-    .where('userIdCard', isEqualTo: widget.userIdCard)
-    .orderBy('queueDate', descending: true)
-    .get();
-    final docs = snapshot.docs;
-    final docIds = docs
-        .map((d) => (d.data()['docId'] ?? ''))
-        .toSet()
-        .where((id) => id != '')
-        .map((id) => id.toString())
-        .toList();
-    final doctorMap = await _fetchDoctorNames(docIds);
-
-    // ดึง queueId ทั้งหมดจาก logHistory
-    final queueIds = docs
-        .map((d) => (d.data()['queueId'] ?? ''))
-        .toSet()
-        .where((id) => id != '')
-        .map((id) => id.toString())
-        .toList();
-    Map<String, Map<String, dynamic>> queueDetailMap = {};
-    // Firestore whereIn จำกัด 10 รายการต่อ 1 query ต้องแบ่ง batch
-    const batchSize = 10;
-    for (var i = 0; i < queueIds.length; i += batchSize) {
-      final batchIds = queueIds.sublist(i, i + batchSize > queueIds.length ? queueIds.length : i + batchSize);
-      final queueSnap = await FirebaseFirestore.instance
-          .collection('queueLists')
-          .where('queueId', whereIn: batchIds)
-          .get();
-      for (var q in queueSnap.docs) {
-        queueDetailMap[q['queueId']] = q.data();
-      }
-    }
-    if (mounted) {
-      setState(() {
-        _docs = docs;
-        _doctorMap = doctorMap;
-        // _queueDetailMap = queueDetailMap;
-        _loading = false;
-      });
-    }
-  }
-
-  Future<void> _refresh() async {
-    await _fetchHistory();
-  }
+class HistorylistPage extends StatelessWidget {
+  final String userId; // เพิ่มพารามิเตอร์สำหรับไอดีผู้ใช้
+  
+  const HistorylistPage({
+    super.key, 
+    required this.userId,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF3F3F3),
+      backgroundColor: Colors.grey[100],
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
+        automaticallyImplyLeading: false,
         title: const Text(
           'ประวัติการจองคิว',
           style: TextStyle(
             color: Colors.black,
-            fontWeight: FontWeight.bold,
-            fontSize: 28,
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
           ),
         ),
-        centerTitle: false,
-        toolbarHeight: 70,
+        centerTitle: true,
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Container(
-          width: double.infinity,
-          decoration: BoxDecoration(
-            color: const Color(0xF2EAE5EC),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          padding: const EdgeInsets.all(20),
-          child: _loading
-              ? const Center(child: CircularProgressIndicator())
-              : _docs.isEmpty
-                  ? const Text('ยังไม่มีประวัติการจองคิว', style: TextStyle(color: Colors.black54))
-                  : RefreshIndicator(
-                      onRefresh: _refresh,
-                      child: ListView.builder(
-                        itemCount: _docs.length,
-                        itemBuilder: (context, idx) {
-                          final data = _docs[idx].data() as Map<String, dynamic>;
-                          final docId = data['docId'] ?? '';
-                          final doctorName = _doctorMap[docId] ?? docId;
-                          final queueDate = data['queueDate'];
-                          String dateStr = '-';
-                          if (queueDate is Timestamp) {
-                            final dt = queueDate.toDate();
-                            dateStr = '${dt.day}/${dt.month}/${dt.year} ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
-                          }
-                          final detail = data['queueText'] ?? '';
-                          return Container(
-                            margin: const EdgeInsets.only(bottom: 24),
-                            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-                            decoration: BoxDecoration(
-                              color: const Color(0xF2EAE5EC),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  dateStr,
-                                  style: const TextStyle(
-                                    fontSize: 20,
-                                    fontWeight: FontWeight.w500,
-                                    color: Colors.black,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  'นัดหมาย $doctorName :',
-                                  style: const TextStyle(
-                                    fontSize: 16,
-                                    color: Colors.black87,
-                                  ),
-                                ),
-                                Text(
-                                  '($detail)',
-                                  style: const TextStyle(
-                                    fontSize: 16,
-                                    color: Colors.black87,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          );
-                        },
-                      ),
+      body: StreamBuilder<QuerySnapshot>(
+        stream: FirebaseFirestore.instance
+            .collection('historyLists')
+            .where('logHisUserId.userIdCard', isEqualTo: userId)
+            .snapshots(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(
+              child: CircularProgressIndicator(),
+            );
+          }
+
+          if (snapshot.hasError) {
+            return Center(
+              child: Text('เกิดข้อผิดพลาด: ${snapshot.error}'),
+            );
+          }
+
+          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+            return const Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.history,
+                    size: 64,
+                    color: Colors.grey,
+                  ),
+                  SizedBox(height: 16),
+                  Text(
+                    'ไม่มีประวัติการจองคิวของคุณ',
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: Colors.grey,
                     ),
-        ),
+                  ),
+                ],
+              ),
+            );
+          }
+
+          final historyDocs = snapshot.data!.docs;
+          
+          // เรียงลำดับตามวันที่ในฝั่ง client
+          historyDocs.sort((a, b) {
+            final dataA = a.data() as Map<String, dynamic>;
+            final dataB = b.data() as Map<String, dynamic>;
+            
+            final dateA = dataA['logHisDate'];
+            final dateB = dataB['logHisDate'];
+            
+            // เรียงจากใหม่ไปเก่า (descending)
+            if (dateA is Timestamp && dateB is Timestamp) {
+              return dateB.compareTo(dateA);
+            }
+            return 0;
+          });
+
+          return ListView.builder(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            itemCount: historyDocs.length,
+            itemBuilder: (context, index) {
+              final doc = historyDocs[index];
+              final data = doc.data() as Map<String, dynamic>;
+
+              // ดึงข้อมูลจาก Firestore
+              final logHisDate = data['logHisDate'] ?? '';
+              final docId = data['logHisDocId']?['docId'] ?? 'ไม่ระบุ';
+              final userIdCard = data['logHisUserId']?['userIdCard'] ?? 'ไม่ระบุ';
+              final logHisText = data['logHisText'] ?? 'ไม่มีรายละเอียด';
+
+              return FutureBuilder<DocumentSnapshot>(
+                future: FirebaseFirestore.instance
+                    .collection('doctor')
+                    .doc(docId)
+                    .get(),
+                builder: (context, doctorSnapshot) {
+                  String doctorName = 'แพทย์ไม่ระบุ';
+                  
+                  if (doctorSnapshot.connectionState == ConnectionState.done) {
+                    if (doctorSnapshot.hasData && doctorSnapshot.data!.exists) {
+                      final doctorData = doctorSnapshot.data!.data() as Map<String, dynamic>;
+                      doctorName = doctorData['docName'] ?? 'แพทย์ไม่ระบุ';
+                    }
+                  } else if (doctorSnapshot.connectionState == ConnectionState.waiting) {
+                    return Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      height: 120,
+                      child: const Center(child: CircularProgressIndicator()),
+                    );
+                  }
+
+                  String appointmentDetails = _formatAppointmentDetails(logHisText);
+
+                  return UserHistoryCard(
+                    date: logHisDate is Timestamp 
+                        ? logHisDate.toDate().toIso8601String()
+                        : _formatFirebaseDate(logHisDate),
+                    doctorName: doctorName,
+                    patientId: userIdCard,
+                    appointmentDetails: appointmentDetails,
+                  );
+                },
+              );
+            },
+          );
+        },
       ),
     );
+  }
+
+  String _formatAppointmentDetails(String logHisText) {
+    if (logHisText.isEmpty || logHisText == 'null') {
+      return 'คำอธิบายเพิ่มเติม: null';
+    }
+    return 'คำอธิบายเพิ่มเติม: $logHisText';
+  }
+
+  String _formatFirebaseDate(dynamic dateField) {
+    try {
+      if (dateField is Timestamp) {
+        final date = dateField.toDate();
+        return '${date.day}/${date.month}/${date.year}';
+      } else if (dateField is String) {
+        if (dateField.contains('UTC') || dateField.contains('at')) {
+          // Parse Firebase date string format
+          final parts = dateField.split(' ');
+          if (parts.length >= 3) {
+            final datePart = parts[0] + ' ' + parts[1] + ' ' + parts[2];
+            final date = DateTime.tryParse(datePart);
+            if (date != null) {
+              return '${date.day}/${date.month}/${date.year}';
+            }
+          }
+        }
+        return dateField;
+      }
+      return DateTime.now().toString().split(' ')[0];
+    } catch (e) {
+      return DateTime.now().toString().split(' ')[0];
+    }
   }
 }
